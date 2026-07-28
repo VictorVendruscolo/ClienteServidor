@@ -263,8 +263,12 @@ static int envia_comando(const char *comando_texto, int tipo)
         {
             struct timespec limite;
 
-            clock_gettime(CLOCK_REALTIME, &limite);
-            limite.tv_sec += TIMEOUT_RESPOSTA_SEG;
+            /* Momento em que desistimos de esperar a resposta.
+             * pthread_cond_timedwait espera um instante absoluto contado da
+             * mesma origem que time() usa, entao basta somar o limite ao
+             * horario atual. */
+            limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;
+            limite.tv_nsec = 0;
 
             pthread_mutex_lock(&canal.mutex);
             while (!canal.resposta_completa && canal.conexao_ativa) {
@@ -342,6 +346,7 @@ static int opcao_adicionar_usuario(int sequencia)
 {
     char entrada[TAM_LINHA];
     char comando[TAM_LINHA];
+    char nome[TAM_NOME];
     int  id = 0;
 
     printf("ID: ");
@@ -368,8 +373,12 @@ static int opcao_adicionar_usuario(int sequencia)
         return 0;
     }
 
+    /* Copia para um buffer do tamanho do campo: o nome ja foi verificado
+     * acima, entao a copia cabe com certeza. */
+    strcpy(nome, entrada);
+
     snprintf(comando, sizeof(comando), "%s %d %d %s",
-             CMD_ADD, sequencia, id, entrada);
+             CMD_ADD, sequencia, id, nome);
 
     switch (envia_comando(comando, AGUARDA_ADD)) {
         case 1:  return 0;
