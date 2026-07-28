@@ -17,7 +17,7 @@ Cliente-Servidor em C · UEMS · Prof. Rubens · Aluno: Victor Vendruscolo
 | **Data de hoje** | 27/07/2026 |
 | **Entrega e apresentação** | **29/07/2026** |
 | **Dias restantes** | 1,5 dia |
-| **Fase atual** | Fase 1, estudo aprofundado dos códigos de aula e Fase 2 concluídos → técnica de concorrência decidida → seguindo para especificação/protocolo (Fase 3) |
+| **Fase atual** | Fases 1, 2 e 3 concluídas (protocolo e especificação fechados) → seguindo para implementação (Fase 4) |
 | **Escopo definido** | **Tudo do enunciado é obrigatório.** Armazenamento: é preciso escolher banco de dados **ou** arquivo (não dá pra pular os dois) — **optamos por arquivo `.txt`**, por ser mais básico (confirmado em aula, seção 0.1). |
 | **Técnica de concorrência** | **DECIDIDO: threads (`pthreads`)** — ver Registro de Decisões, seção 6 |
 | **Terminologia do domínio** | O print usa "paciente"; **nosso sistema usa "usuário"** (o texto do enunciado já usa esse termo). Ver seção 0.1. |
@@ -68,7 +68,7 @@ As fases seguem uma progressão: entender → especificar → construir → vali
 |---|---|---|---|
 | 1 | Analisar os códigos de aula do Rubens | `docs/01_analise_codigos_aula.md` | ✅ Concluída |
 | 2 | Destrinchar o enunciado em atividades | `docs/02_atividades.md` | ✅ Concluída (27/07, revisada 2x) |
-| 3 | Estudar soluções e decidir o caminho | `docs/03_especificacao.md` + `docs/03_protocolo.md` | 🟡 Próxima — técnica decidida (threads); protocolo a escrever |
+| 3 | Estudar soluções e decidir o caminho | `docs/03_especificacao.md` + `docs/03_protocolo.md` | ✅ Concluída (27/07) |
 | 4 | Implementar cliente e servidor | `src/` + `Makefile` | ⬜ A fazer |
 | 5 | Testar e validar | `docs/05_plano_testes.md` + `testes/` | ⬜ A fazer |
 | 6 | Estudar a fundo o código final | `docs/06_estudo_aprofundado.md` | ⬜ A fazer |
@@ -147,34 +147,28 @@ Ações menores:
 **Técnica de concorrência: DECIDIDO — threads.** Ver seção 6 (Registro de Decisões).
 Funcionalidades e escopo já destrinchados em `docs/02_atividades.md` (Fase 2).
 
-Ações menores restantes:
-- [ ] 3.3 Definir a **estrutura de dados da fila** (lista/array de usuários com ID e Nome)
-      protegida por `pthread_mutex_t` (obrigatório com threads — ver `docs/00_estudo_codigos_aula.md`, 5.7).
-- [ ] 3.4 Definir o **protocolo**: cada tipo de mensagem, formato exato dos bytes/campos,
-      quem envia, o que espera de resposta. Ex.: `LOGIN`, `ADD ID Nome`, `LIST`, `HEARTBEAT`,
-      respostas `LOGIN_OK`, `ALIVE`, etc. Usar o formato de fila confirmado no print
-      (`===== FILA =====` / `ID - Nome` / `================`). Escrever em `docs/03_protocolo.md`.
-- [ ] 3.4.1 **Login**: usuário/senha **fixos no código** (confirmado em aula) — definir o par
-      exato de credenciais e como a mensagem `LOGIN` os carrega no protocolo.
-- [ ] 3.5 Tratar **retransmissão de mensagens** com **ACK de envio/recebimento** (anotação de
-      aula para o item 4 da documentação) — desenhar o mecanismo (timeout + reenvio, número de
-      sequência, etc.) e documentar.
-- [ ] 3.6 IP/porta: porta **8080** fixa (do print); IP do servidor como **constante `#define
-      SERVER_IP` no código do cliente** (decidido — servidor e clientes rodam em máquinas
-      diferentes na mesma rede). Antes da apresentação: descobrir o IP real da máquina do
-      servidor (`ip a` / `hostname -I`) e recompilar o cliente com esse valor. **Melhoria futura,
-      se sobrar tempo:** ler o IP de um arquivo texto ao lado do executável, para não precisar
-      recompilar a cada rede diferente.
-- [ ] 3.7 Implementar Heartbeat conforme **decidido**: apenas usuários cadastrados por outros
-      clientes desde a última checagem (`ALIVE` se não houver novidade) — documentar no protocolo
-      a divergência com o print do enunciado (decisão de implementação, item 3 da doc).
-- [ ] 3.8 Modelar a persistência (`.txt`) separando claramente dois tipos de dado: dados de
-      **cliente** (sessão/login: usuários-operadores, sessões, logs) e dados de **usuário**
-      (fila, histórico de inserções — o que era "paciente"). O enunciado lista "usuários; filas;
-      histórico; logs; sessões (dados do cliente que logou)" como o que persistir.
-- [ ] 3.9 Escrever `docs/03_especificacao.md` juntando decisões de arquitetura + protocolo.
+Ações menores:
+- [x] 3.3 Estrutura de dados da fila **decidida**: array fixo `Usuario fila[20000]` (ID + Nome),
+      protegido por `pthread_mutex_t` — ver `docs/03_protocolo.md`, seção 5.
+- [x] 3.4 Protocolo completo escrito em `docs/03_protocolo.md`: cada mensagem, formato exato
+      (texto ASCII terminado em `\n`, com número de sequência), quem envia, o que espera de
+      resposta.
+- [x] 3.4.1 Login: credencial de exemplo `admin`/`admin123`, fixa no código (trocável) —
+      `docs/03_protocolo.md`, seção 3.
+- [x] 3.5 Retransmissão decidida: **resposta = ACK implícito** + timeout de 3s / 3 tentativas +
+      número de sequência para evitar duplicar — `docs/03_protocolo.md`, seção 6.
+- [x] 3.6 IP/porta: porta **8080** fixa; IP do servidor como **constante `#define SERVER_IP`**
+      no cliente (servidor e clientes rodam em máquinas diferentes na mesma rede — recompilar
+      antes de cada apresentação/teste). Melhoria futura, se sobrar tempo: ler de arquivo texto.
+- [x] 3.7 Heartbeat: apenas usuários cadastrados por **outros** clientes desde a última checagem
+      (`ALIVE` senão) — decisão de implementação documentada (diverge do print, segue o texto).
+- [x] 3.8 Persistência (`.txt`) modelada em 4 arquivos, separando dados de **cliente**
+      (sessões/logs) e **usuário** (fila/histórico) — `docs/03_protocolo.md`, seção 7. Servidor
+      sempre começa com a fila vazia (não recarrega).
+- [x] 3.9 `docs/03_especificacao.md` escrito, juntando arquitetura + protocolo + proposta de
+      módulos do código-fonte + rastreabilidade com os 8 itens da documentação.
 
-**Pronto quando:** o protocolo estiver escrito por completo.
+**Pronto ✅.**
 
 ---
 
@@ -317,6 +311,7 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 | **27/07** | **Login: usuário/senha fixos, hardcoded no código** | Confirmado em aula ("deixar no código"; "senha já está no código" no LOGIN_OK) — não é autenticação dinâmica contra arquivo/BD | 3 |
 | **27/07** | **Retransmissão de mensagens via ACK de envio/recebimento** | Anotação de aula para o item 4 da documentação | 3 |
 | **27/07** | **IP do servidor fixo no código (`#define SERVER_IP`)**, não descoberta dinâmica | Confirmado: servidor roda numa máquina, clientes em outras, mesma rede. Nenhum código de aula do Rubens faz descoberta de rede (todos usam IP literal) — implementar isso do zero seria fora do escopo ensinado e arriscado com 1,5 dia restante. Solução: recompilar o cliente com o IP certo antes de cada teste/apresentação. **Se sobrar tempo:** melhorar para ler o IP de um arquivo texto (não recompila) | 3 |
+| **27/07** | **Protocolo v1 fechado**: mensagens texto/`\n`, fila = array fixo (20000), retransmissão = resposta como ACK + timeout 3s/3 tentativas + nº de sequência, persistência em 4 arquivos, fila sempre começa vazia, credencial de login `admin`/`admin123` | Discutido item a item com você; ver `docs/03_protocolo.md` para o racional completo de cada escolha | 3 |
 
 ---
 
@@ -347,9 +342,8 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 
 ---
 
-*Última atualização: 27/07/2026 — incorporadas anotações de aula do Rubens: terminologia
-("usuário" no lugar de "paciente"), login (credenciais fixas no código), persistência
-(obrigatório escolher, optamos por arquivo), retransmissão (ACK), detalhes dos itens 4/5/8
-da documentação, e confirmação de que servidor e clientes rodam em máquinas diferentes na
-mesma rede — decidido IP fixo no código (`#define SERVER_IP`), com melhoria futura opcional
-para ler de arquivo. Fase 3 pronta para começar sem pendências bloqueantes.*
+*Última atualização: 27/07/2026 — Fase 3 concluída: `docs/03_protocolo.md` (mensagens,
+estrutura de dados, retransmissão via ACK implícito, persistência em 4 arquivos, credencial de
+login) e `docs/03_especificacao.md` (arquitetura + protocolo + proposta de módulos +
+rastreabilidade com os 8 itens da documentação). Próximo: Fase 4 — implementação em C,
+começando pelo Makefile e o esqueleto de conexão.*
