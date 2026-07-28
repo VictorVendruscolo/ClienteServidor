@@ -17,7 +17,7 @@ Cliente-Servidor em C · UEMS · Prof. Rubens · Aluno: Victor Vendruscolo
 | **Data de hoje** | 27/07/2026 |
 | **Entrega e apresentação** | **29/07/2026** |
 | **Dias restantes** | 1,5 dia |
-| **Fase atual** | Fases 1, 2 e 3 concluídas (protocolo e especificação fechados) → seguindo para implementação (Fase 4) |
+| **Fase atual** | Fases 1 a 4 concluídas — **versão 1 do código implementada e testada** (`src/`, ver `docs/04_implementacao.md`) → seguindo para validação em rede real (Fase 5) |
 | **Escopo definido** | **Tudo do enunciado é obrigatório.** Armazenamento: é preciso escolher banco de dados **ou** arquivo (não dá pra pular os dois) — **optamos por arquivo `.txt`**, por ser mais básico (confirmado em aula, seção 0.1). |
 | **Técnica de concorrência** | **DECIDIDO: threads (`pthreads`)** — ver Registro de Decisões, seção 6 |
 | **Terminologia do domínio** | O print usa "paciente"; **nosso sistema usa "usuário"** (o texto do enunciado já usa esse termo). Ver seção 0.1. |
@@ -69,7 +69,7 @@ As fases seguem uma progressão: entender → especificar → construir → vali
 | 1 | Analisar os códigos de aula do Rubens | `docs/01_analise_codigos_aula.md` | ✅ Concluída |
 | 2 | Destrinchar o enunciado em atividades | `docs/02_atividades.md` | ✅ Concluída (27/07, revisada 2x) |
 | 3 | Estudar soluções e decidir o caminho | `docs/03_especificacao.md` + `docs/03_protocolo.md` | ✅ Concluída (27/07) |
-| 4 | Implementar cliente e servidor | `src/` + `Makefile` | ⬜ A fazer |
+| 4 | Implementar cliente e servidor | `src/` + `Makefile` + `docs/04_implementacao.md` | ✅ Concluída (27/07) |
 | 5 | Testar e validar | `docs/05_plano_testes.md` + `testes/` | ⬜ A fazer |
 | 6 | Estudar a fundo o código final | `docs/06_estudo_aprofundado.md` | ⬜ A fazer |
 | — | Documentação final + entrega | `docs/documentacao.pdf` + `readme.txt` + `.zip` | ⬜ A fazer |
@@ -174,30 +174,38 @@ Ações menores:
 
 ### FASE 4 — Implementar cliente e servidor
 
-Ações menores (ordem de implementação):
-- [ ] 4.1 `Makefile` mínimo que compila `cliente` e `servidor` com `-lpthread` (montar cedo, testar o `make`).
-- [ ] 4.2 Servidor: criar socket, `SO_REUSEADDR`, `bind` na porta 8080, `listen`, `accept` em laço `while(1)`,
-      logando `Servidor iniciado na porta 8080` / `Novo cliente conectado.` / `Cliente desconectado.`.
-- [ ] 4.3 Cliente: `connect` (IPv4, porta 8080, IP do servidor via `#define SERVER_IP` — decidido
-      na seção 6), enviar `LOGIN` com a credencial fixa, receber `LOGIN_OK`, mostrar menu com as
-      opções `1`/`2`/`3`/`0` exatamente como no print (rótulos com "usuário" em vez de "paciente").
-- [ ] 4.3.1 Antes de recompilar para a apresentação: descobrir o IP real da máquina que vai
-      rodar o `servidor` (`ip a` / `hostname -I`) e atualizar `SERVER_IP` no cliente.
-- [ ] 4.4 Servidor: `pthread_create` + `pthread_detach` por cliente conectado (base: `multithread.c`, com a correção do cast via `intptr_t`).
-- [ ] 4.5 Funcionalidade "Adicionar usuário" (ID + Nome) + guardar na fila no servidor, protegida por mutex.
-- [ ] 4.6 Funcionalidade "Ver fila" (servidor devolve a lista formatada: `===== FILA =====` / `ID - Nome` / `================`).
-- [ ] 4.7 **Broadcast** direto para todos os clientes ao adicionar usuário, mantendo a lista
-      de cada um atualizada em tempo real (`[Broadcast] Novo usuário: <nome>`).
-- [ ] 4.8 **Heartbeat**: devolve os usuários cadastrados por **outros** clientes desde a última
-      checagem, ou `ALIVE` se não houver novidade (decidido — ver seção 6).
-- [ ] 4.9 "Sair" limpo (fechar socket, servidor detecta desconexão via `recv() <= 0`).
-- [ ] 4.10 **Retransmissão de mensagens via ACK** (envio/recebimento confirmado) — item 4 da documentação.
-- [ ] 4.11 Modularizar (`.c`/`.h`) e comentar — a avaliação cobra organização e modularidade.
-- [ ] 4.12 **Persistência em arquivo `.txt`** (escolhida no lugar do banco): grava dados de
-      **cliente** (usuários-operadores/sessões/logs — quem logou) e dados de **usuário**
-      (filas/histórico — conteúdo da fila), como dois conjuntos de dados distintos.
+> ✅ **Concluída em 27/07.** Código em `src/` (9 arquivos + `Makefile` + `readme.txt`).
+> Registro completo da implementação, decisões e testes em `docs/04_implementacao.md`.
+> Compila com `gcc -Wall -Wextra` **sem nenhum aviso**.
 
-**Pronto quando:** cliente e servidor reproduzem o comportamento dos prints ponta a ponta.
+Ações menores (ordem de implementação):
+- [x] 4.1 `Makefile` que compila `cliente` e `servidor` com `-pthread`. `make` sem parâmetros
+      gera **exatamente** os dois binários exigidos; o gerador de carga ficou no alvo separado
+      `make carga`, para não arriscar a regra do enunciado.
+- [x] 4.2 Servidor: socket, `SO_REUSEADDR`, `bind` na porta 8080, `listen`, `accept` em laço,
+      logando `Servidor iniciado na porta 8080` / `Novo cliente conectado.` / `Cliente desconectado.`
+      (com número da conexão e origem no fim da linha, para o print do teste de carga).
+- [x] 4.3 Cliente: `connect` (IPv4, porta 8080, `#define SERVER_IP`), `LOGIN` automático com a
+      credencial fixa, `LOGIN_OK`, menu `1`/`2`/`3`/`0` com "usuário" no lugar de "paciente".
+- [ ] 4.3.1 Antes de recompilar para a apresentação: descobrir o IP real da máquina que vai
+      rodar o `servidor` (`hostname -I`) e atualizar `SERVER_IP` em `src/comum.h`. **Pendente** —
+      valor atual é `127.0.0.1` (mesma máquina).
+- [x] 4.4 Servidor: uma thread por cliente, criada já desatachada. O socket vai para a thread
+      dentro de uma `struct` alocada, o que resolve com margem o defeito de cast do `multithread.c`.
+- [x] 4.5 "Adicionar usuário" (ID + Nome), guardado na fila protegida por mutex.
+- [x] 4.6 "Ver fila" no formato `===== FILA =====` / `ID - Nome` / `================`.
+- [x] 4.7 **Broadcast** para todos os clientes, exceto o autor, a cada inserção.
+- [x] 4.8 **Heartbeat**: usuários cadastrados por **outros** desde a última checagem, ou `ALIVE`.
+- [x] 4.9 "Sair" limpo; queda abrupta também detectada e tratada.
+- [x] 4.10 **Retransmissão**: resposta como ACK + tempo limite de 3 s + 3 tentativas com o mesmo
+      número de sequência + idempotência no servidor + descarte de respostas duplicadas no cliente.
+- [x] 4.11 Modularizado em 5 módulos com cabeçalho próprio, todos comentados.
+- [x] 4.12 **Persistência em arquivo `.txt`**: `sessoes.log` e `servidor.log` (dados de cliente),
+      `fila.txt` e `historico.txt` (dados de usuário).
+- [x] 4.13 *(não previsto)* Gerador automático de carga `carga.c`, para os testes da Fase 5.
+
+**Pronto ✅** — cliente e servidor reproduzem o comportamento dos prints ponta a ponta, e os
+casos especiais e o teste de carga (100/1000/10000) já passaram em ambiente local.
 
 ---
 
@@ -311,6 +319,12 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 | **27/07** | **Login: usuário/senha fixos, hardcoded no código** | Confirmado em aula ("deixar no código"; "senha já está no código" no LOGIN_OK) — não é autenticação dinâmica contra arquivo/BD | 3 |
 | **27/07** | **Retransmissão de mensagens via ACK de envio/recebimento** | Anotação de aula para o item 4 da documentação | 3 |
 | **27/07** | **IP do servidor fixo no código (`#define SERVER_IP`)**, não descoberta dinâmica | Confirmado: servidor roda numa máquina, clientes em outras, mesma rede. Nenhum código de aula do Rubens faz descoberta de rede (todos usam IP literal) — implementar isso do zero seria fora do escopo ensinado e arriscado com 1,5 dia restante. Solução: recompilar o cliente com o IP certo antes de cada teste/apresentação. **Se sobrar tempo:** melhorar para ler o IP de um arquivo texto (não recompila) | 3 |
+| **27/07** | **Escopo da v1: robustez sobre as funcionalidades já especificadas** (F1–F11), não novas funcionalidades | Sua orientação: "os prints são apenas a base, não o objetivo final". Traduzido em validação de toda entrada, tratamento de erro em toda syscall, casos de borda cobertos e modularidade real — que é exatamente o que a seção Avaliação cobra. As funções aspiracionais da introdução (painel, métricas, cadastro de operadores) seguem fora de escopo | 4 |
+| **27/07** | **Módulo `sessoes.c/.h` acrescentado** à estrutura proposta na Fase 3 | O broadcast exige um registro dos sockets conectados, e a escrita em cada socket precisa ser serializada para um bloco de fila não ser partido ao meio por uma mensagem assíncrona. Elemento não previsto no enunciado, documentado explicitamente como a Avaliação exige | 4 |
+| **27/07** | **Cliente também com duas threads** (receptora + menu) | Com um só fluxo, o cliente ficaria preso no teclado e não veria o broadcast em tempo real | 4 |
+| **27/07** | **Protocolo em ASCII puro; acentuação só na exibição** | O enunciado especifica texto ASCII e o professor confere a captura de rede contra a documentação; a tela do operador continua em português correto porque o cliente reescreve a mensagem ao exibir | 4 |
+| **27/07** | **`make carga` como alvo separado** do `make` padrão | `make` sem parâmetros gera exatamente `cliente` e `servidor`, sem binário extra — risco zero com a correção automatizada | 4 |
+| **27/07** | **`SERVER_IP` mantido em `127.0.0.1` na v1** | Permite validar tudo hoje numa máquina só; a constante está isolada no topo de `comum.h` com instrução destacada. Trocar pelo IP real e rodar `make` antes da apresentação | 4 |
 | **27/07** | **Protocolo v1 fechado**: mensagens texto/`\n`, fila = array fixo (20000), retransmissão = resposta como ACK + timeout 3s/3 tentativas + nº de sequência, persistência em 4 arquivos, fila sempre começa vazia, credencial de login `admin`/`admin123` | Discutido item a item com você; ver `docs/03_protocolo.md` para o racional completo de cada escolha | 3 |
 
 ---
@@ -342,8 +356,9 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 
 ---
 
-*Última atualização: 27/07/2026 — Fase 3 concluída: `docs/03_protocolo.md` (mensagens,
-estrutura de dados, retransmissão via ACK implícito, persistência em 4 arquivos, credencial de
-login) e `docs/03_especificacao.md` (arquitetura + protocolo + proposta de módulos +
-rastreabilidade com os 8 itens da documentação). Próximo: Fase 4 — implementação em C,
-começando pelo Makefile e o esqueleto de conexão.*
+*Última atualização: 27/07/2026 — **Fase 4 concluída**: versão 1 do código implementada em
+`src/` (comum.h, protocolo, fila, sessoes, persistencia, servidor, cliente, carga, Makefile,
+readme.txt), compilando sem avisos e aprovada em teste funcional, casos especiais,
+retransmissão e carga de 100/1000/10000 clientes. Registro completo em
+`docs/04_implementacao.md`. Próximo: Fase 5 — validar com servidor e clientes em máquinas
+diferentes, capturar as telas dos itens 6 e 7 e conferir o tráfego no Wireshark.*
