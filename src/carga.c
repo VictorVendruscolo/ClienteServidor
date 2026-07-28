@@ -20,13 +20,16 @@
  * "variar a porta" por "repetir N vezes na mesma porta".
  *
  * Cada cliente gerado conecta E se autentica, ocupando uma sessao no
- * servidor, igual a um ./cliente de verdade. Todas as conexoes sao mantidas
- * ABERTAS ao mesmo tempo e o programa aguarda ENTER antes de encerra-las:
- * e isso que permite capturar uma tela com todas as conexoes simultaneas
- * visiveis, como pede o enunciado.
+ * servidor, igual a um ./cliente de verdade.
  *
- * IMPORTANTE para os testes: reinicie o servidor antes de cada carga, para
- * que a numeracao das conexoes na tela dele comece em [#1].
+ * As conexoes sao mantidas abertas ate o operador pressionar ENTER. Isso e
+ * essencial para o teste: sem manter, o programa estaria abrindo e fechando
+ * N conexoes em sequencia, e o servidor nunca atenderia mais do que uma por
+ * vez. Mantendo todas ativas, o servidor precisa sustentar N clientes
+ * simultaneos - que e o que o teste se propoe a medir.
+ *
+ * Reinicie o servidor antes de cada execucao, para que a numeracao das
+ * conexoes na tela dele comece em [#1].
  *
  * Antes do teste com muitos clientes, eleve o limite de descritores do
  * terminal:   ulimit -n 20000
@@ -168,8 +171,8 @@ int main(int argc, char *argv[])
     }
 
     printf("\nResultado: %d conexoes abertas, %d falhas.\n", abertos, falhas);
-    printf("As conexoes estao ABERTAS. Capture a tela do servidor agora.\n");
-    printf("Pressione ENTER para fecha-las...");
+    printf("As %d conexoes permanecem ativas simultaneamente.\n", abertos);
+    printf("Pressione ENTER para encerra-las...");
     fflush(stdout);
 
     if (fgets(tecla, sizeof(tecla), stdin) == NULL) {

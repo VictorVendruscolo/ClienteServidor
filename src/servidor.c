@@ -497,9 +497,9 @@ static void *atende_cliente(void *argumento)
     ip[sizeof(ip) - 1] = '\0';
     free(dados);                    /* os dados ja foram copiados para a pilha */
 
-    /* A linha comeca exatamente com o texto da tela do enunciado; o numero da
-     * conexao e a origem sao acrescentados para que, nos testes de carga, seja
-     * possivel identificar cada uma das conexoes na captura de tela. */
+    /* O numero sequencial e a origem tornam cada conexao identificavel no
+     * registro do servidor - necessario quando ha milhares de clientes
+     * conectados, em que linhas iguais seriam indistinguiveis. */
     persistencia_log_servidor("Novo cliente conectado. [#%lu] %s:%d",
                               numero, ip, porta);
 
