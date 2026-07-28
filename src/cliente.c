@@ -70,10 +70,7 @@ typedef struct {
     int aguardando;          /* qual comando espera resposta (AGUARDA_*)     */
     int resposta_completa;   /* 1 quando a resposta terminou de chegar       */
     int conexao_ativa;       /* 0 quando o servidor fecha ou ocorre erro     */
-
-    int descartar;           /* respostas duplicadas a ignorar (por reenvio) */
     int dentro_do_bloco;     /* 1 enquanto le linhas entre cabecalho e rodape*/
-    int descartando_atual;   /* 1 se a resposta em curso deve ser ignorada   */
 } Canal;
 
 static Canal  canal;
@@ -190,32 +187,27 @@ static void *thread_receptora(void *argumento)
 
         pthread_mutex_lock(&canal.mutex);
 
+        /* Regra unica: so exibimos uma resposta se houver um comando
+         * esperando por ela. Se nao houver, esta e a copia atrasada de um
+         * comando que ja foi reenviado e abandonado - e ela e ignorada, para
+         * nao ser confundida com a resposta do proximo comando. */
         if (!canal.dentro_do_bloco) {
-            /* Primeira linha de uma resposta: decide se ela sera exibida ou
-             * ignorada (caso seja a copia atrasada de um comando reenviado). */
-            canal.descartando_atual = (canal.descartar > 0);
-            if (canal.descartando_atual) {
-                canal.descartar--;
-            }
-
             if (strcmp(linha, FILA_CABECALHO) == 0) {
                 canal.dentro_do_bloco = 1;
-                if (!canal.descartando_atual) {
+                if (canal.aguardando != AGUARDA_NADA) {
                     imprime_resposta(canal.aguardando, linha, 1);
                 }
-            } else {
-                if (!canal.descartando_atual) {
-                    imprime_resposta(canal.aguardando, linha, 1);
-                    marca_resposta_completa();
-                }
+            } else if (canal.aguardando != AGUARDA_NADA) {
+                imprime_resposta(canal.aguardando, linha, 1);
+                marca_resposta_completa();
             }
         } else {
-            if (!canal.descartando_atual) {
+            if (canal.aguardando != AGUARDA_NADA) {
                 imprime_resposta(canal.aguardando, linha, 0);
             }
             if (strcmp(linha, FILA_RODAPE) == 0) {
                 canal.dentro_do_bloco = 0;
-                if (!canal.descartando_atual) {
+                if (canal.aguardando != AGUARDA_NADA) {
                     marca_resposta_completa();
                 }
             }
@@ -289,16 +281,10 @@ static int envia_comando(const char *comando_texto, int tipo)
         }
     }
 
+    /* Deixa de esperar resposta. A partir daqui, qualquer copia atrasada que
+     * ainda chegue sera ignorada pela thread receptora. */
     pthread_mutex_lock(&canal.mutex);
-
-    /* O comando foi enviado 'envios' vezes e apenas uma resposta foi
-     * consumida (ou nenhuma). Cada envio adicional pode ainda gerar uma
-     * resposta em transito, que a thread receptora reconhecera e ignorara -
-     * evitando que a copia atrasada seja confundida com a resposta do
-     * proximo comando. */
-    canal.descartar += obtida ? (envios - 1) : envios;
     canal.aguardando = AGUARDA_NADA;
-
     pthread_mutex_unlock(&canal.mutex);
 
     if (caiu) {

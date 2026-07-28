@@ -12,21 +12,23 @@
  * Esse registro nao esta descrito no enunciado, mas e indispensavel para o
  * protocolo funcionar - por isso e documentado explicitamente.
  *
- * DOIS NIVEIS DE EXCLUSAO MUTUA
- * -----------------------------
- * 1) Um rwlock protege a TABELA de sessoes. Broadcast e uma operacao de
- *    leitura (varios podem correr juntos); registrar e remover sessao sao
- *    operacoes de escrita (exclusivas). Como a remocao so acontece quando
- *    nenhum broadcast esta em andamento, e impossivel enviar dados para um
- *    socket que acabou de ser fechado.
+ * DUAS TRAVAS, COM PAPEIS DIFERENTES
+ * ----------------------------------
+ * 1) Um mutex protege a TABELA de sessoes (quem esta conectado). Ele e usado
+ *    ao registrar, remover e percorrer a tabela. Como a remocao de uma sessao
+ *    so acontece quando ninguem esta percorrendo a tabela, e impossivel
+ *    enviar dados para um socket que acabou de ser fechado.
  *
  * 2) Cada sessao tem seu proprio mutex de ENVIO. Ele garante que uma resposta
- *    de varias linhas (o bloco "===== FILA =====") nunca seja partida ao meio
- *    por uma mensagem de broadcast chegando de outra thread. Sem isso o
- *    cliente receberia linhas intercaladas e o protocolo se quebraria.
+ *    de varias linhas (o bloco "===== FILA =====") nao seja partida ao meio
+ *    por uma mensagem de broadcast vinda de outra thread. Sem isso o cliente
+ *    receberia linhas intercaladas e o protocolo se quebraria.
  *
- * Hierarquia de travas (sempre nesta ordem, para nao haver impasse):
- *      rwlock da tabela  ->  mutex de envio da sessao  ->  mutex da fila
+ * REGRA PARA NAO HAVER IMPASSE (deadlock)
+ * ---------------------------------------
+ * Uma thread nunca deve remover a propria sessao enquanto estiver segurando
+ * o mutex de envio dela. No servidor isso e respeitado naturalmente: o envio
+ * de cada resposta trava e destrava o mutex antes de a conexao ser encerrada.
  * ===========================================================================
  */
 
@@ -87,10 +89,5 @@ void sessoes_libera_envio(int id_sessao);
  * Retorna quantos clientes estao autenticados neste instante.
  */
 int sessoes_conectadas(void);
-
-/*
- * Libera os recursos da tabela. Chamada no encerramento do servidor.
- */
-void sessoes_destroi(void);
 
 #endif /* SESSOES_H */

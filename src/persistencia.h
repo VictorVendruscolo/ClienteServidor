@@ -55,9 +55,4 @@ void persistencia_historico_add(int id, const char *nome);
  */
 void persistencia_salva_fila(void);
 
-/*
- * Fecha os arquivos abertos. Chamada no encerramento do servidor.
- */
-void persistencia_fecha(void);
-
 #endif /* PERSISTENCIA_H */

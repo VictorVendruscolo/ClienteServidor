@@ -40,14 +40,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>       /* intptr_t                                       */
 #include <signal.h>
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sched.h>
 #include <sys/socket.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -107,41 +105,10 @@ typedef struct {
     int  indice_visto_antes;                /* valor anterior, para reenvio */
 } EstadoConexao;
 
-/* Socket de escuta, mantido global para poder ser fechado pelo tratador de
- * sinal quando o servidor for encerrado com Ctrl+C. */
-static int socket_escuta = -1;
-
 /* Contador de conexoes aceitas, usado para numerar as linhas de log e tornar
  * cada conexao identificavel nos testes de carga. */
 static unsigned long   total_conexoes  = 0;
 static pthread_mutex_t mutex_contador  = PTHREAD_MUTEX_INITIALIZER;
-
-/* ===========================================================================
- * Encerramento ordenado
- * ===========================================================================
- */
-
-/*
- * Tratador de SIGINT (Ctrl+C): fecha o socket de escuta e libera os recursos
- * dos modulos antes de terminar, garantindo que os arquivos de dados sejam
- * fechados corretamente.
- */
-static void encerra_servidor(int sinal)
-{
-    (void) sinal;
-
-    persistencia_log_servidor("Servidor encerrado.");
-
-    if (socket_escuta >= 0) {
-        close(socket_escuta);
-        socket_escuta = -1;
-    }
-    persistencia_fecha();
-    sessoes_destroi();
-    fila_destroi();
-
-    _exit(0);
-}
 
 /* ===========================================================================
  * Funcoes auxiliares de envio
@@ -623,6 +590,7 @@ int main(void)
 {
     struct sockaddr_in endereco_servidor;
     pthread_attr_t     atributos;
+    int                socket_escuta;
     int                valor = 1;
 
     /* Um send() para um socket que o cliente ja fechou gera SIGPIPE, cujo
@@ -630,7 +598,6 @@ int main(void)
      * o send() apenas devolver erro, que o codigo ja trata - indispensavel
      * num servidor com muitos clientes entrando e saindo. */
     signal(SIGPIPE, SIG_IGN);
-    signal(SIGINT,  encerra_servidor);
 
     if (persistencia_init() != 0) {
         return 1;
@@ -696,34 +663,19 @@ int main(void)
         DadosConexao      *dados;
         pthread_t          identificador_thread;
         int                novo_socket;
-        struct timeval     tempo_envio;
 
         novo_socket = accept(socket_escuta,
                              (struct sockaddr *) &endereco_cliente,
                              &tamanho_endereco);
 
         if (novo_socket < 0) {
-            if (errno == EINTR) {
-                continue;
+            /* Uma falha ao aceitar (inclusive falta de descritores livres) nao
+             * derruba o servidor: registra e volta a aceitar conexoes. */
+            if (errno != EINTR) {
+                perror("Erro no accept");
             }
-            /* Sem descritores livres: nao e motivo para derrubar o servidor.
-             * Registra e continua, liberando espaco conforme clientes saem. */
-            if (errno == EMFILE || errno == ENFILE) {
-                persistencia_log_servidor("Aviso: limite de descritores atingido, conexao recusada.");
-                sleep(1);
-                continue;
-            }
-            perror("Erro no accept");
             continue;
         }
-
-        /* Limite de tempo para escrita: impede que um cliente que parou de ler
-         * bloqueie indefinidamente uma thread do servidor (e, com ela, os
-         * broadcasts para os demais). */
-        tempo_envio.tv_sec  = 2;
-        tempo_envio.tv_usec = 0;
-        setsockopt(novo_socket, SOL_SOCKET, SO_SNDTIMEO,
-                   &tempo_envio, sizeof(tempo_envio));
 
         dados = (DadosConexao *) malloc(sizeof(DadosConexao));
         if (dados == NULL) {
@@ -757,5 +709,6 @@ int main(void)
         sched_yield();
     }
 
-    /* Inalcancavel: o encerramento ocorre pelo tratador de SIGINT. */
+    /* O laco acima so termina se o processo for encerrado (Ctrl+C). Como cada
+     * gravacao nos arquivos de dados e seguida de fflush, nada se perde. */
 }

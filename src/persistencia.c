@@ -35,11 +35,9 @@ static FILE *arq_servidor  = NULL;
 static FILE *arq_sessoes   = NULL;
 static FILE *arq_historico = NULL;
 
-/* Um mutex por arquivo: gravacoes em arquivos distintos nao se bloqueiam. */
-static pthread_mutex_t mutex_servidor  = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_sessoes   = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_historico = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mutex_fila_arq  = PTHREAD_MUTEX_INITIALIZER;
+/* Um unico mutex protege toda a gravacao. Como cada escrita e curta e seguida
+ * de fflush, uma trava so e suficiente e mantem o modulo simples. */
+static pthread_mutex_t mutex_dados = PTHREAD_MUTEX_INITIALIZER;
 
 /* ---------------------------------------------------------------------------
  * agora_texto
@@ -91,7 +89,7 @@ void persistencia_log_servidor(const char *formato, ...)
 
     agora_texto(instante, sizeof(instante));
 
-    pthread_mutex_lock(&mutex_servidor);
+    pthread_mutex_lock(&mutex_dados);
 
     /* Terminal: exatamente o texto das telas de funcionamento do enunciado. */
     printf("%s\n", mensagem);
@@ -103,7 +101,7 @@ void persistencia_log_servidor(const char *formato, ...)
         fflush(arq_servidor);
     }
 
-    pthread_mutex_unlock(&mutex_servidor);
+    pthread_mutex_unlock(&mutex_dados);
 }
 
 void persistencia_log_sessao(const char *evento, const char *ip)
@@ -112,7 +110,7 @@ void persistencia_log_sessao(const char *evento, const char *ip)
 
     agora_texto(instante, sizeof(instante));
 
-    pthread_mutex_lock(&mutex_sessoes);
+    pthread_mutex_lock(&mutex_dados);
     if (arq_sessoes != NULL) {
         fprintf(arq_sessoes, "%s %s %s\n",
                 evento,
@@ -120,7 +118,7 @@ void persistencia_log_sessao(const char *evento, const char *ip)
                 instante);
         fflush(arq_sessoes);
     }
-    pthread_mutex_unlock(&mutex_sessoes);
+    pthread_mutex_unlock(&mutex_dados);
 }
 
 void persistencia_historico_add(int id, const char *nome)
@@ -129,12 +127,12 @@ void persistencia_historico_add(int id, const char *nome)
 
     agora_texto(instante, sizeof(instante));
 
-    pthread_mutex_lock(&mutex_historico);
+    pthread_mutex_lock(&mutex_dados);
     if (arq_historico != NULL) {
         fprintf(arq_historico, "%s ADD %d %s\n", instante, id, nome);
         fflush(arq_historico);
     }
-    pthread_mutex_unlock(&mutex_historico);
+    pthread_mutex_unlock(&mutex_dados);
 }
 
 void persistencia_salva_fila(void)
@@ -144,13 +142,13 @@ void persistencia_salva_fila(void)
     int     posicao = 0;
     int     copiados;
 
-    pthread_mutex_lock(&mutex_fila_arq);
+    pthread_mutex_lock(&mutex_dados);
 
     /* Este arquivo e um retrato do estado atual, entao e reescrito por
      * completo ("w") a cada insercao, e nao acrescentado. */
     arquivo = fopen(ARQ_FILA, "w");
     if (arquivo == NULL) {
-        pthread_mutex_unlock(&mutex_fila_arq);
+        pthread_mutex_unlock(&mutex_dados);
         return;
     }
 
@@ -174,29 +172,5 @@ void persistencia_salva_fila(void)
     fprintf(arquivo, "%s\n", FILA_RODAPE);
     fclose(arquivo);
 
-    pthread_mutex_unlock(&mutex_fila_arq);
-}
-
-void persistencia_fecha(void)
-{
-    pthread_mutex_lock(&mutex_servidor);
-    if (arq_servidor != NULL) {
-        fclose(arq_servidor);
-        arq_servidor = NULL;
-    }
-    pthread_mutex_unlock(&mutex_servidor);
-
-    pthread_mutex_lock(&mutex_sessoes);
-    if (arq_sessoes != NULL) {
-        fclose(arq_sessoes);
-        arq_sessoes = NULL;
-    }
-    pthread_mutex_unlock(&mutex_sessoes);
-
-    pthread_mutex_lock(&mutex_historico);
-    if (arq_historico != NULL) {
-        fclose(arq_historico);
-        arq_historico = NULL;
-    }
-    pthread_mutex_unlock(&mutex_historico);
+    pthread_mutex_unlock(&mutex_dados);
 }

@@ -65,9 +65,4 @@ int fila_tamanho(void);
  */
 int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max);
 
-/*
- * Libera o mutex da fila. Chamada apenas no encerramento do servidor.
- */
-void fila_destroi(void);
-
 #endif /* FILA_H */

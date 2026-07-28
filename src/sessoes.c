@@ -24,10 +24,10 @@ typedef struct {
     pthread_mutex_t envio_mutex;             /* serializa escritas no socket */
 } Sessao;
 
-static Sessao           tabela[MAX_SESSOES];
-static int              total_conectadas = 0;
-static int              proximo_slot     = 0;  /* dica de busca circular     */
-static pthread_rwlock_t tabela_lock;
+static Sessao          tabela[MAX_SESSOES];
+static int             total_conectadas = 0;
+static int             proximo_slot     = 0;  /* dica de busca circular      */
+static pthread_mutex_t tabela_mutex;
 
 int sessoes_init(void)
 {
@@ -37,7 +37,7 @@ int sessoes_init(void)
     total_conectadas = 0;
     proximo_slot     = 0;
 
-    if (pthread_rwlock_init(&tabela_lock, NULL) != 0) {
+    if (pthread_mutex_init(&tabela_mutex, NULL) != 0) {
         return -1;
     }
 
@@ -57,7 +57,7 @@ int sessoes_registra(int sock, const char *ip)
     int tentativas;
     int i;
 
-    pthread_rwlock_wrlock(&tabela_lock);
+    pthread_mutex_lock(&tabela_mutex);
 
     /* Busca circular a partir do ultimo slot usado: evita varrer a tabela
      * inteira desde o inicio a cada nova conexao. */
@@ -85,7 +85,7 @@ int sessoes_registra(int sock, const char *ip)
         total_conectadas++;
     }
 
-    pthread_rwlock_unlock(&tabela_lock);
+    pthread_mutex_unlock(&tabela_mutex);
     return encontrado;
 }
 
@@ -95,7 +95,7 @@ void sessoes_remove(int id_sessao)
         return;
     }
 
-    pthread_rwlock_wrlock(&tabela_lock);
+    pthread_mutex_lock(&tabela_mutex);
 
     if (tabela[id_sessao].em_uso) {
         tabela[id_sessao].em_uso = 0;
@@ -103,7 +103,7 @@ void sessoes_remove(int id_sessao)
         total_conectadas--;
     }
 
-    pthread_rwlock_unlock(&tabela_lock);
+    pthread_mutex_unlock(&tabela_mutex);
 }
 
 void sessoes_broadcast(int id_sessao_origem, const char *linha)
@@ -114,10 +114,9 @@ void sessoes_broadcast(int id_sessao_origem, const char *linha)
         return;
     }
 
-    /* Trava de leitura: varios broadcasts podem ocorrer ao mesmo tempo, mas
-     * nenhuma sessao pode ser removida enquanto este laco estiver rodando -
-     * e isso que impede um send() em socket ja fechado. */
-    pthread_rwlock_rdlock(&tabela_lock);
+    /* A tabela fica travada durante todo o laco. E isso que impede uma sessao
+     * de ser removida (e o socket fechado) no meio de um envio. */
+    pthread_mutex_lock(&tabela_mutex);
 
     for (i = 0; i < MAX_SESSOES; i++) {
         if (!tabela[i].em_uso || i == id_sessao_origem) {
@@ -132,7 +131,7 @@ void sessoes_broadcast(int id_sessao_origem, const char *linha)
         pthread_mutex_unlock(&tabela[i].envio_mutex);
     }
 
-    pthread_rwlock_unlock(&tabela_lock);
+    pthread_mutex_unlock(&tabela_mutex);
 }
 
 void sessoes_trava_envio(int id_sessao)
@@ -141,10 +140,9 @@ void sessoes_trava_envio(int id_sessao)
         return;
     }
 
-    /* A trava de leitura e adquirida junto com o mutex de envio para manter
-     * sempre a mesma ordem de aquisicao usada em sessoes_broadcast(). Ordem
-     * unica de travamento e o que garante ausencia de impasse (deadlock). */
-    pthread_rwlock_rdlock(&tabela_lock);
+    /* Nao e preciso travar a tabela aqui: quem chama e a propria thread dona
+     * da sessao, e so ela remove a sessao - portanto a entrada existe com
+     * certeza enquanto esta chamada acontece. */
     pthread_mutex_lock(&tabela[id_sessao].envio_mutex);
 }
 
@@ -155,26 +153,15 @@ void sessoes_libera_envio(int id_sessao)
     }
 
     pthread_mutex_unlock(&tabela[id_sessao].envio_mutex);
-    pthread_rwlock_unlock(&tabela_lock);
 }
 
 int sessoes_conectadas(void)
 {
     int total;
 
-    pthread_rwlock_rdlock(&tabela_lock);
+    pthread_mutex_lock(&tabela_mutex);
     total = total_conectadas;
-    pthread_rwlock_unlock(&tabela_lock);
+    pthread_mutex_unlock(&tabela_mutex);
 
     return total;
-}
-
-void sessoes_destroi(void)
-{
-    int i;
-
-    for (i = 0; i < MAX_SESSOES; i++) {
-        pthread_mutex_destroy(&tabela[i].envio_mutex);
-    }
-    pthread_rwlock_destroy(&tabela_lock);
 }

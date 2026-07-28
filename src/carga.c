@@ -7,10 +7,9 @@
  * Compilacao:  make carga
  * Execucao:    ./carga <quantidade> [login]
  *
- * Exemplos:
- *      ./carga 100
- *      ./carga 1000
- *      ./carga 10000 login
+ * Exemplos:    ./carga 100
+ *              ./carga 1000
+ *              ./carga 10000 login
  *
  * O enunciado exige testar o servidor com 100, 1000 e 10000 clientes, com
  * geracao automatica, e permite expressamente que isso seja feito por um
@@ -18,16 +17,18 @@
  * esse programa - ele NAO substitui o ./cliente, que continua sendo iniciado
  * sem parametros.
  *
- * A estrutura segue o exemplo de laco de conexoes visto em aula (porta.c),
- * trocando "variar a porta" por "repetir N vezes na mesma porta".
+ * A estrutura segue o laco de conexoes visto em aula (porta.c), trocando
+ * "variar a porta" por "repetir N vezes na mesma porta".
  *
  * Todas as conexoes sao mantidas ABERTAS ao mesmo tempo e o programa aguarda
  * ENTER antes de encerra-las: e isso que permite capturar uma tela em que
  * todas as conexoes simultaneas estejam visiveis, como pede o enunciado.
  *
- * Sem o argumento "login", cada cliente apenas estabelece a conexao TCP
- * (mede a capacidade de aceitacao do servidor). Com "login", cada cliente
- * tambem se autentica e passa a ocupar uma sessao no servidor.
+ * Sem o argumento "login", cada cliente apenas estabelece a conexao TCP.
+ * Com "login", cada cliente tambem se autentica e ocupa uma sessao.
+ *
+ * Antes do teste com muitos clientes, eleve o limite de descritores do
+ * terminal:   ulimit -n 20000
  * ===========================================================================
  */
 
@@ -37,9 +38,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <unistd.h>
-#include <time.h>
 #include <sys/socket.h>
-#include <sys/resource.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -48,36 +47,6 @@
 
 /* De quantas em quantas conexoes o progresso e informado na tela. */
 #define INTERVALO_RELATORIO 100
-
-/* ---------------------------------------------------------------------------
- * amplia_limite_descritores
- *
- * Cada conexao consome um descritor de arquivo. O limite padrao costuma ser
- * 1024, insuficiente para o teste de 10000 clientes. Esta funcao eleva o
- * limite flexivel ate o limite rigido permitido ao usuario, sem exigir
- * privilegios de administrador.
- *
- * Retorna o novo limite efetivo.
- * ---------------------------------------------------------------------------
- */
-static long amplia_limite_descritores(void)
-{
-    struct rlimit limite;
-
-    if (getrlimit(RLIMIT_NOFILE, &limite) != 0) {
-        return -1;
-    }
-
-    if (limite.rlim_cur < limite.rlim_max) {
-        limite.rlim_cur = limite.rlim_max;
-        if (setrlimit(RLIMIT_NOFILE, &limite) != 0) {
-            /* Mantem o limite anterior; o programa avisara se faltar espaco. */
-            getrlimit(RLIMIT_NOFILE, &limite);
-        }
-    }
-
-    return (long) limite.rlim_cur;
-}
 
 /*
  * Abre uma conexao com o servidor.
@@ -137,24 +106,19 @@ static int autentica(int sock)
 
 int main(int argc, char *argv[])
 {
-    int    *sockets;
-    long    limite_descritores;
-    int     quantidade;
-    int     com_login = 0;
-    int     abertos   = 0;
-    int     falhas    = 0;
-    int     i;
-    time_t  inicio;
-    double  duracao;
-    char    tecla[8];
+    int *sockets;
+    int  quantidade;
+    int  com_login = 0;
+    int  abertos   = 0;
+    int  falhas    = 0;
+    int  i;
+    char tecla[8];
 
     /* Escrever num socket que o servidor fechou nao deve derrubar o teste. */
     signal(SIGPIPE, SIG_IGN);
 
     if (argc < 2 || argc > 3) {
         fprintf(stderr, "Uso: %s <quantidade> [login]\n", argv[0]);
-        fprintf(stderr, "Exemplos: %s 100 | %s 1000 | %s 10000 login\n",
-                argv[0], argv[0], argv[0]);
         return 1;
     }
 
@@ -172,53 +136,35 @@ int main(int argc, char *argv[])
         com_login = 1;
     }
 
-    limite_descritores = amplia_limite_descritores();
-
-    printf("=== Teste de carga ===\n");
-    printf("Servidor .................: %s:%d\n", SERVER_IP, SERVER_PORTA);
-    printf("Clientes solicitados .....: %d\n", quantidade);
-    printf("Autenticacao .............: %s\n", com_login ? "sim" : "nao (apenas conexao)");
-    printf("Limite de descritores ....: %ld\n", limite_descritores);
-
-    if (limite_descritores > 0 && quantidade + 16 > limite_descritores) {
-        printf("AVISO: o limite de descritores pode ser insuficiente.\n");
-        printf("       Execute 'ulimit -n %d' antes de rodar o teste.\n",
-               quantidade + 64);
-    }
-    printf("\n");
-
     sockets = (int *) malloc((size_t) quantidade * sizeof(int));
     if (sockets == NULL) {
         fprintf(stderr, "Erro: memoria insuficiente para %d conexoes.\n", quantidade);
         return 1;
     }
 
-    inicio = time(NULL);
+    printf("Abrindo %d conexoes em %s:%d%s\n\n", quantidade, SERVER_IP,
+           SERVER_PORTA, com_login ? " (com autenticacao)" : "");
 
     for (i = 0; i < quantidade; i++) {
         int sock = conecta();
 
-        if (sock < 0) {
-            falhas++;
-            sockets[i] = -1;
-
-            /* Na primeira falha, mostra o motivo: quase sempre e limite de
-             * descritores, esgotamento de portas ou servidor fora do ar. */
-            if (falhas == 1) {
-                printf("Primeira falha na conexao %d: %s\n", i + 1, strerror(errno));
-            }
-            continue;
-        }
-
-        if (com_login && !autentica(sock)) {
+        if (sock >= 0 && com_login && !autentica(sock)) {
             close(sock);
-            sockets[i] = -1;
-            falhas++;
-            continue;
+            sock = -1;
         }
 
         sockets[i] = sock;
-        abertos++;
+
+        if (sock >= 0) {
+            abertos++;
+        } else {
+            falhas++;
+            /* Na primeira falha, mostra o motivo: quase sempre e limite de
+             * descritores (use ulimit -n) ou servidor fora do ar. */
+            if (falhas == 1) {
+                printf("Primeira falha na conexao %d: %s\n", i + 1, strerror(errno));
+            }
+        }
 
         if ((i + 1) % INTERVALO_RELATORIO == 0) {
             printf("Conexoes estabelecidas: %d de %d\n", abertos, i + 1);
@@ -226,16 +172,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    duracao = difftime(time(NULL), inicio);
-
-    printf("\n=== Resultado ===\n");
-    printf("Conexoes solicitadas .....: %d\n", quantidade);
-    printf("Conexoes bem-sucedidas ...: %d\n", abertos);
-    printf("Falhas ...................: %d\n", falhas);
-    printf("Tempo total ..............: %.0f segundo(s)\n", duracao);
-    printf("\nAs %d conexoes estao ABERTAS neste momento.\n", abertos);
-    printf("Verifique a tela do servidor e capture a imagem agora.\n");
-    printf("Pressione ENTER para fechar todas as conexoes...");
+    printf("\nResultado: %d conexoes abertas, %d falhas.\n", abertos, falhas);
+    printf("As conexoes estao ABERTAS. Capture a tela do servidor agora.\n");
+    printf("Pressione ENTER para fecha-las...");
     fflush(stdout);
 
     if (fgets(tecla, sizeof(tecla), stdin) == NULL) {

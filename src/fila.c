@@ -95,8 +95,3 @@ int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max)
     pthread_mutex_unlock(&fila_mutex);
     return copiados;
 }
-
-void fila_destroi(void)
-{
-    pthread_mutex_destroy(&fila_mutex);
-}
