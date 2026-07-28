@@ -1,9 +1,9 @@
 # Fase 2 — Atividades (Destrinchar o Enunciado)
 
-*Checklist priorizada de funcionalidades. Versão revisada em 27/07 após leitura direta de
-`trabalho_redes_2026.pdf` (a primeira versão deste documento foi montada sem acesso ao PDF,
-só com o que já estava resumido no `GUIA_MESTRE.md` — esta revisão confirma e corrige alguns
-pontos com base no texto e nos prints originais).*
+*Checklist priorizada de funcionalidades. Revisada duas vezes em 27/07: primeiro após leitura
+direta de `trabalho_redes_2026.pdf`, depois após suas anotações de aula (terminologia, login,
+persistência, itens da documentação). Ver `GUIA_MESTRE.md`, seção 0.1, para o texto completo
+das anotações.*
 
 ---
 
@@ -11,23 +11,28 @@ pontos com base no texto e nos prints originais).*
 
 | # | Funcionalidade | O que faz | Obrigatória/Opcional |
 |---|---|---|---|
-| F1 | **Login** | Cliente conecta; servidor responde `Servidor: LOGIN_OK`. O print não mostra troca de usuário/senha — só a resposta fixa. Mecanismo exato (autenticação real vs. resposta fixa) **ainda em aberto** — resolver na Fase 3. | Obrigatória (a funcionalidade); mecanismo a definir |
-| F2 | **Menu principal** | Exibido após login, com **4 opções numeradas exatamente assim**: `1 - Adicionar paciente`, `2 - Ver fila`, `3 - Heartbeat`, `0 - Sair` (não é 1-2-3-4; o "Sair" é `0`). Relevante para o protocolo: o valor literal enviado pelo cliente provavelmente é esse número. | Obrigatória |
-| F3 | **Adicionar paciente** | Cliente informa `ID` e `Nome` (ex.: `ID: 20`, `Nome: Carlos`); servidor confirma com `Paciente <nome> adicionado.`, guarda na fila compartilhada (protegida por `pthread_mutex_t`, técnica = threads) e dispara broadcast. | Obrigatória |
-| F4 | **Ver fila** | Servidor devolve a lista formatada. Formato exato visto no print: cabeçalho `===== FILA =====`, uma linha por paciente `ID - Nome`, rodapé `================`. | Obrigatória |
-| F5 | **Broadcast** | Ao adicionar paciente, o servidor distribui **diretamente para todos os clientes** conectados a lista atualizada, de forma assíncrona (chega no meio da tela, sem o cliente pedir): `[Broadcast] Novo paciente: <nome>`. | Obrigatória |
-| F6 | **Heartbeat** | **Decidido (27/07):** segue a definição textual do enunciado (observação) — devolve a lista de pacientes cadastrados por **outros** clientes desde a última checagem; se não houve novidade, devolve `ALIVE`. O print do 2º cliente mostra a fila inteira (não só os de outros), mas essa divergência **não** será reproduzida — documentar a escolha como decisão de implementação (item 3 da doc). | Obrigatória |
+| F1 | **Login** | Cliente conecta; servidor responde `Servidor: LOGIN_OK`. **Decidido:** usuário/senha **fixos, hardcoded no código** (confirmado em aula: "deixar no código"; "senha já está no código"). Não é autenticação dinâmica contra arquivo/BD. | Obrigatória — mecanismo definido |
+| F2 | **Menu principal** | Exibido após login, com **4 opções numeradas exatamente assim**: `1 - Adicionar usuário`, `2 - Ver fila`, `3 - Heartbeat`, `0 - Sair` (o print usa "paciente" e numeração 1/2/3/0 — nosso sistema usa "usuário", mesma numeração). | Obrigatória |
+| F3 | **Adicionar usuário** | Cliente informa `ID` e `Nome` (ex.: `ID: 20`, `Nome: Carlos`); servidor confirma com `Usuário <nome> adicionado.`, guarda na fila compartilhada (protegida por `pthread_mutex_t`, técnica = threads) e dispara broadcast. (Print usa "paciente" — nosso sistema usa "usuário".) | Obrigatória |
+| F4 | **Ver fila** | Servidor devolve a lista formatada. Formato exato visto no print: cabeçalho `===== FILA =====`, uma linha por usuário `ID - Nome`, rodapé `================`. | Obrigatória |
+| F5 | **Broadcast** | Ao adicionar usuário, o servidor distribui **diretamente para todos os clientes** conectados a lista atualizada, de forma assíncrona (chega no meio da tela, sem o cliente pedir): `[Broadcast] Novo usuário: <nome>` (print usa "paciente"). | Obrigatória |
+| F6 | **Heartbeat** | **Decidido:** segue a definição textual do enunciado (observação) — devolve a lista de usuários cadastrados por **outros** clientes desde a última checagem; se não houve novidade, devolve `ALIVE`. O print do 2º cliente mostra a fila inteira (não só os de outros), mas essa divergência **não** será reproduzida — documentar a escolha como decisão de implementação (item 3 da doc). | Obrigatória |
 | F7 | **Sair** | Fecha a conexão de forma limpa; servidor detecta a desconexão via `recv() <= 0`. | Obrigatória |
 | F8 | **Log de conexão/desconexão no servidor** | O servidor imprime no próprio terminal `Servidor iniciado na porta 8080`, `Novo cliente conectado.` e `Cliente desconectado.` a cada evento. Aparece no print (tela do servidor) — não é interno/opcional. | Obrigatória |
-| F9 | **Retransmissão de mensagens** | Tratamento de perda/reenvio — a documentação (item 4) exige explicitamente que isso seja descrito. Mecanismo a definir na Fase 3. | Obrigatória (exigida pela documentação, independente do print) |
-| F10 | **Persistência (arquivo `.txt`)** | O enunciado marca a persistência inteira como não obrigatória ("Gravação em Arquivo / Banco de Dados (não obrigatório)"), mas **decidido manter (27/07)**. Grava dois tipos de dado distintos, conforme esclarecido por você: dados de **cliente** — usuários, sessões, logs ("dados do cliente que logou") — e dados de **paciente** — filas, histórico (conteúdo da fila). | Obrigatória (por decisão própria; enunciado permitiria cortar) |
-| F11 | **IP/porta automáticos** | Porta fixa **8080** (confirmada no print: "Servidor iniciado na porta 8080"); cliente conecta sem parâmetros (`./cliente`, sem argumentos). | Obrigatória (regra de entrega) |
+| F9 | **Retransmissão de mensagens** | **Decidido:** tratamento via **ACK de envio/recebimento** (anotação de aula para o item 4 da documentação, literalmente exigido). Detalhamento do mecanismo (timeout, número de sequência) — Fase 3. | Obrigatória (exigida pela documentação) |
+| F10 | **Persistência (arquivo `.txt`)** | Rubens esclareceu em aula: é obrigatório escolher banco de dados **ou** arquivo (o "(não obrigatório)" do PDF se refere a poder trocar um pelo outro, não a pular os dois). **Decidido: arquivo `.txt`**, por ser mais básico. Grava dois tipos de dado distintos: dados de **cliente** — usuários-operadores, sessões, logs ("dados do cliente que logou") — e dados de **usuário** (ex-"paciente") — filas, histórico (conteúdo da fila). | Obrigatória |
+| F11 | **IP/porta automáticos** | Porta fixa **8080** (confirmada no print: "Servidor iniciado na porta 8080"); cliente conecta sem parâmetros (`./cliente`, sem argumentos). **Confirmado:** servidor roda numa máquina, clientes em outras, mesma rede. **Decidido:** IP do servidor como constante `#define SERVER_IP` no código do cliente — recompilar antes de cada teste/apresentação em rede nova. Nenhum código de aula faz descoberta dinâmica, então fica fora de escopo por ora. Melhoria futura (se sobrar tempo): ler o IP de um arquivo texto, sem recompilar. | Obrigatória — mecanismo definido |
 
 **Fora de escopo para este ciclo** (mencionado só na introdução do enunciado — cadastro de
-usuários completo, notificações "em tempo real" no sentido de push além do broadcast já coberto,
-painéis administrativos, balanceamento de carga, métricas): não aparecem nos prints, na
-"Observação", nem nos 8 itens da documentação. Tratados como **fora de escopo** dado o prazo de
-1,5 dia.
+usuários completo além do login fixo, notificações "em tempo real" no sentido de push além do
+broadcast já coberto, painéis administrativos, balanceamento de carga, métricas): não aparecem
+nos prints, na "Observação", nem nos 8 itens da documentação. Tratados como **fora de escopo**
+dado o prazo de 1,5 dia.
+
+**Nota de terminologia:** este documento usa "usuário" onde o print original do enunciado usa
+"paciente" (ex.: "Adicionar paciente" → "Adicionar usuário"). Decisão confirmada em aula — ver
+`GUIA_MESTRE.md`, seção 0.1. "Cliente" continua sendo um conceito diferente: a sessão/instância
+do programa `./cliente` que faz login (com credencial fixa) e opera o sistema.
 
 ---
 
@@ -36,42 +41,48 @@ painéis administrativos, balanceamento de carga, métricas): não aparecem nos 
 | Funcionalidade | Item(ns) da documentação que alimenta |
 |---|---|
 | F1, F2 (login, menu) | 1 (sumário do problema), 7 (prints de funcionamento) |
-| F3, F4 (add paciente, ver fila) | 2 (algoritmos/TADs/decisões), 7 (prints) |
+| F3, F4 (add usuário, ver fila) | 2 (algoritmos/TADs/decisões), 7 (prints) |
 | F5 (broadcast) | 2, 3 (decisões de implementação) |
 | F6 (heartbeat) | 2, 3 (documentar a divergência com o print), 7 |
 | F7 (sair) | 2, 7 |
 | F8 (log de conexão/desconexão) | 7 (prints do servidor) |
-| F9 (retransmissão) | **4** (item dedicado, obrigatório) |
-| F10 (persistência) | 3 (decisão de implementação — manter ou não, e por quê) |
+| F9 (retransmissão via ACK) | **4** (item dedicado, obrigatório — anotado "ack envio/recebimento") |
+| F10 (persistência) | 3 (decisão de implementação — arquivo em vez de banco, e por quê) |
 | F11 (IP/porta automáticos) | 3 |
-| Testes de carga 100/1000/10000 | 5, 6 |
-| Estudo aprofundado + apresentação | 8 (conclusão + referências) |
+| Testes de carga 100/1000/10000 | 5 (anotado "logs/printscreen"), 6 |
+| Estudo aprofundado + apresentação | 8 (conclusão sobre desenvolvimento/dificuldades + referências) |
 
 ---
 
 ## 3. Ordem de prioridade sugerida (alinhada à Fase 4 do GUIA_MESTRE)
 
-Dado 1,5 dia restante, a ordem de implementação já definida na Fase 4 (ações 4.1 a 4.11) é a
-prioridade: primeiro o esqueleto que compila e conecta (F11, F1, F2, F8), depois o núcleo de
-negócio (F3, F4), depois broadcast e heartbeat (F5, F6), depois saída limpa (F7), e só então
-retransmissão (F9) e persistência (F10) — nessa ordem porque F9 e F10 dependem do protocolo e
-da estrutura de dados já estarem funcionando, e F10 é a única funcionalidade da lista que pode
-ser cortada sem violar o enunciado, se o tempo apertar.
+Dado 1,5 dia restante, a ordem de implementação já definida na Fase 4 é a prioridade: primeiro
+o esqueleto que compila e conecta (F11, F1, F2, F8), depois o núcleo de negócio (F3, F4), depois
+broadcast e heartbeat (F5, F6), depois saída limpa (F7), e só então retransmissão via ACK (F9) e
+persistência (F10) — nessa ordem porque F9 e F10 dependem do protocolo e da estrutura de dados
+já estarem funcionando. Diferente da revisão anterior: **persistência (F10) não é mais cortável**
+— Rubens esclareceu que é obrigatório escolher arquivo ou banco.
 
 ---
 
 ## 4. Pendências que seguem para a Fase 3
 
-- **Mecanismo de login** (F1): autenticação real ou resposta fixa `LOGIN_OK`? Ainda em aberto.
-- **Retransmissão de mensagens** (F9): mecanismo específico ainda não definido.
-- **Estrutura de dados da persistência** (F10): definir o formato exato do `.txt` para os dois
-  conjuntos de dados (cliente: usuários/sessões/logs; paciente: filas/histórico) na Fase 3.
+- **Retransmissão via ACK (F9):** desenhar o mecanismo exato (timeout, número de sequência,
+  quantas tentativas).
+- **Estrutura de dados da persistência (F10):** definir o formato exato do `.txt` para os dois
+  conjuntos de dados (cliente: usuários-operadores/sessões/logs; usuário: filas/histórico).
+- **Credencial de login (F1):** definir o par usuário/senha fixo exato e como a mensagem `LOGIN`
+  o carrega no protocolo.
+- **IP do servidor (F11):** descobrir o IP real da máquina que vai rodar o servidor no dia do
+  teste e definir o valor de `SERVER_IP` no código do cliente.
 
-**Já decididas (27/07):** Heartbeat segue o texto do enunciado (não o print); persistência
-mantida em `.txt`. Ver `GUIA_MESTRE.md`, seção 6.
+**Já decididas:** terminologia (usuário no lugar de paciente); heartbeat segue o texto do
+enunciado; persistência em `.txt` (obrigatória, não cortável); login com credencial fixa no
+código; IP do servidor fixo no código (`#define`). Ver `GUIA_MESTRE.md`, seções 0.1 e 6. Sem
+pendências bloqueantes para começar a Fase 3.
 
 ---
 
-*Fase 2 revisada em 27/07/2026 após leitura direta do PDF do enunciado. Próximo: Fase 3 —
-escrever `docs/03_protocolo.md` (estrutura de dados da fila + protocolo completo), já com a
-técnica de concorrência decidida (threads).*
+*Fase 2 revisada em 27/07/2026 após leitura do PDF e anotações de aula do Rubens. Próximo:
+Fase 3 — escrever `docs/03_protocolo.md` (estrutura de dados da fila + protocolo completo),
+já com a técnica de concorrência decidida (threads) e as pendências acima resolvidas.*

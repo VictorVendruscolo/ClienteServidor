@@ -18,12 +18,15 @@ Cliente-Servidor em C · UEMS · Prof. Rubens · Aluno: Victor Vendruscolo
 | **Entrega e apresentação** | **29/07/2026** |
 | **Dias restantes** | 1,5 dia |
 | **Fase atual** | Fase 1, estudo aprofundado dos códigos de aula e Fase 2 concluídos → técnica de concorrência decidida → seguindo para especificação/protocolo (Fase 3) |
-| **Escopo definido** | **Tudo do enunciado é obrigatório.** A persistência era opcional pelo texto ("Gravação em Arquivo / Banco de Dados — **não obrigatório**"), mas **decidido manter** em arquivo `.txt` (seção 6). |
+| **Escopo definido** | **Tudo do enunciado é obrigatório.** Armazenamento: é preciso escolher banco de dados **ou** arquivo (não dá pra pular os dois) — **optamos por arquivo `.txt`**, por ser mais básico (confirmado em aula, seção 0.1). |
 | **Técnica de concorrência** | **DECIDIDO: threads (`pthreads`)** — ver Registro de Decisões, seção 6 |
+| **Terminologia do domínio** | O print usa "paciente"; **nosso sistema usa "usuário"** (o texto do enunciado já usa esse termo). Ver seção 0.1. |
 | **Trabalho individual** | Sim |
 
 ### Regras de entrega que NÃO podem falhar (do enunciado)
-Estas eliminam o trabalho da correção se descumpridas. Tratar como sagradas:
+Estas eliminam o trabalho da correção se descumpridas. Tratar como sagradas — **o trabalho é
+corrigido por scripts de correção automatizados** (confirmado em aula), então nomes, parâmetros
+e formatos exatos importam mais do que pareceria à primeira vista:
 
 1. Entregar um **.zip** com tudo num **único diretório**.
 2. Dentro: `readme.txt` (nome do aluno + comando de execução), o **PDF da documentação**,
@@ -31,8 +34,28 @@ Estas eliminam o trabalho da correção se descumpridas. Tratar como sagradas:
 3. Um **Makefile** que, rodado sem parâmetros (`make`), gera **dois** programas chamados
    **exatamente** `cliente` e `servidor`.
 4. Os programas iniciam **sem parâmetros**: `./cliente` e `./servidor`. O cliente descobre
-   IP e porta **automaticamente**.
+   IP e porta **automaticamente**. **Confirmado:** servidor roda numa máquina, clientes em
+   outras, mesma rede. **Decidido: IP fixo no código** (`#define SERVER_IP`) — ver seção 6.
 5. **O programa precisa compilar.** Se não compilar, não é corrigido.
+
+---
+
+## 0.1 Esclarecimentos do Rubens em aula (suas anotações, registradas em 27/07)
+
+| Tema | Esclarecimento |
+|---|---|
+| **Terminologia** | O print usa "paciente" (`Adicionar paciente`, `Paciente Carlos adicionado`), mas o texto do enunciado já usa "usuário" (observação do Heartbeat: "lista de usuários"; introdução: "cadastro e autenticação de usuários"). Você confirmou: **trocamos "paciente" por "usuário"** no nosso sistema. Continua existindo, à parte, o "cliente" — o software/sessão que conecta e loga. São dois conceitos diferentes: **usuário** = quem entra na fila (ID + Nome, ex-"paciente"); **cliente** = a instância do programa `./cliente` que loga e opera o sistema. |
+| **Cadastro e autenticação** | É para **"deixar no código"** — usuário/senha **fixos, embutidos no fonte**, não uma validação dinâmica contra arquivo/BD. Você também anotou, na tela de LOGIN_OK: "senha já está no código". **Isso fecha a pendência do mecanismo de login** (ver Fase 3 e seção 7). |
+| **Armazenamento** | Rubens esclareceu verbalmente: é para **escolher** banco de dados OU arquivo — não para tratar a persistência como dispensável, como o parêntese isolado "(não obrigatório)" do PDF poderia sugerir. **Optamos por arquivo**, por ser mais básico. Isso substitui a leitura anterior deste guia (que tratava a persistência inteira como opcional/cortável). |
+| **Item 4 da documentação** | Anotado como **"ack envio/recebimento"** — a retransmissão de mensagens deve ser tratada com confirmação (ACK) de envio/recebimento entre cliente e servidor. |
+| **Item 5 da documentação** | Anotado como **"logs/printscreen"** — os testes devem ser evidenciados com logs e capturas de tela. |
+| **Item 8 da documentação** | Anotado como **"conclusão do desenvolvimento, dificuldades..."** — a conclusão deve falar do processo de desenvolvimento e das dificuldades enfrentadas, não só resultado final. |
+| **Referências bibliográficas (item 8)** | Você não tem certeza do que entra aqui. Provavelmente os dois links de Makefile já dados no enunciado, mais qualquer fonte técnica usada (man pages, documentação de `pthreads`, etc.). Baixa prioridade agora — resolver na Fase 6. |
+| **Correção automatizada** | O trabalho é corrigido por **scripts de correção**, não só leitura humana — reforça por que Makefile e nomes/parâmetros exatos são inegociáveis, e sugere que os formatos de saída (texto exato dos prints, ex.: `LOGIN_OK`, `ALIVE`, `===== FILA =====`) devem ser seguidos à risca. |
+| **Nível do relatório** | A documentação final deve ter **nível acadêmico**, no padrão dos relatórios que você já escreve para as bolsas. Nota para a Fase 6. |
+| **Sobre os prints do enunciado** | Você anotou que a 3ª imagem (tela do servidor, página 4 do PDF) foi a **primeira execução** — ou seja, os prints não são uma única sessão sincronizada; são capturas ilustrativas separadas de execuções diferentes. |
+| **Captura de pacotes** | O professor vai capturar o tráfego (Wireshark) e conferir contra o que **a documentação** descreve — reforça: documentar exatamente o protocolo implementado, não um ideal. |
+| **Linguagem e ambiente** | Trabalho em **C**. **Confirmado:** servidor roda numa máquina, clientes em outras máquinas, mesma rede — não é só portabilidade de build. **Decidido:** IP do servidor fixo no código (`#define`), igual ao padrão de todos os códigos de aula do Rubens; se sobrar tempo, melhorar para ler de um arquivo texto (sem recompilar) — ver seção 6. |
 
 ---
 
@@ -44,7 +67,7 @@ As fases seguem uma progressão: entender → especificar → construir → vali
 | Fase | Nome | Entregável ao fim | Status |
 |---|---|---|---|
 | 1 | Analisar os códigos de aula do Rubens | `docs/01_analise_codigos_aula.md` | ✅ Concluída |
-| 2 | Destrinchar o enunciado em atividades | `docs/02_atividades.md` | ✅ Concluída (27/07, revisada após leitura do PDF) |
+| 2 | Destrinchar o enunciado em atividades | `docs/02_atividades.md` | ✅ Concluída (27/07, revisada 2x) |
 | 3 | Estudar soluções e decidir o caminho | `docs/03_especificacao.md` + `docs/03_protocolo.md` | 🟡 Próxima — técnica decidida (threads); protocolo a escrever |
 | 4 | Implementar cliente e servidor | `src/` + `Makefile` | ⬜ A fazer |
 | 5 | Testar e validar | `docs/05_plano_testes.md` + `testes/` | ⬜ A fazer |
@@ -87,30 +110,32 @@ análise completa dos 7.
 
 ### FASE 2 — Destrinchar o enunciado em atividades (a mais importante)
 
-> ✅ **Concluída em 27/07, revisada no mesmo dia após leitura direta de
-> `trabalho_redes_2026.pdf`.** Resultado completo em `docs/02_atividades.md`. A primeira
-> versão tinha sido montada só com o que já estava resumido neste guia; a revisão confirmou
-> a maior parte e corrigiu um ponto importante de escopo (persistência) — ver seção 7.
+> ✅ **Concluída em 27/07, revisada duas vezes no mesmo dia:** primeiro após leitura direta de
+> `trabalho_redes_2026.pdf`, depois após suas anotações de aula (terminologia, login, persistência,
+> itens da documentação). Resultado completo em `docs/02_atividades.md`.
 
 Ações menores:
-- [x] 2.1 Listar cada funcionalidade vista nos **prints**: login (`LOGIN_OK`), menu com
-      exatamente `1 - Adicionar paciente`, `2 - Ver fila`, `3 - Heartbeat`, `0 - Sair`,
-      Adicionar paciente (ID + Nome), Ver fila, Heartbeat, Sair, e as mensagens do servidor
+- [x] 2.1 Listar cada funcionalidade vista nos **prints**: login (`LOGIN_OK`, senha fixa no
+      código), menu com exatamente `1 - Adicionar usuário` (print usa "paciente", nós usamos
+      "usuário"), `2 - Ver fila`, `3 - Heartbeat`, `0 - Sair`, e as mensagens do servidor
       (`Servidor iniciado na porta 8080`, `Novo cliente conectado.`, `Cliente desconectado.`).
 - [x] 2.2 Detalhar o comportamento do **Heartbeat** conforme a observação do enunciado:
       "devolver a lista de usuários cadastrados por **outros** clientes; se não houver novas
-      inserções, devolver `ALIVE`." **Decisão confirmada por você (27/07):** seguir o texto da
-      observação, não o print — o print diverge (mostra a fila inteira), mas o comportamento
-      correto é só os pacientes cadastrados por outros clientes desde a última checagem.
-      Documentar essa divergência como decisão de implementação (item 3 da doc).
-- [x] 2.3 Detalhar o **broadcast**: quando um cliente adiciona paciente, os outros recebem
-      `[Broadcast] Novo paciente: <nome>` (confirmado no print do 2º cliente).
+      inserções, devolver `ALIVE`." **Decidido:** seguir o texto da observação, não o print — o
+      print diverge (mostra a fila inteira). Documentar a divergência como decisão de
+      implementação (item 3 da doc).
+- [x] 2.3 Detalhar o **broadcast**: quando um cliente adiciona usuário, o servidor distribui a
+      lista atualizada diretamente para todos os clientes (`[Broadcast] Novo usuário: <nome>`
+      no nosso sistema; o print, com a terminologia antiga, mostra "Novo paciente").
 - [x] 2.4 Marcar o que é **obrigatório** (núcleo) vs **opcional**. Confirmado no texto do
-      enunciado: a introdução (cadastro completo de usuários, notificações além do broadcast,
-      painéis administrativos, balanceamento de carga, métricas) é aspiracional e não aparece
-      nos prints/observação/documentação — fora de escopo. Persistência era opcional pelo texto
-      (seção SISTEMAS), mas **decidido manter** (arquivo `.txt`) — ver seção 6.
-- [x] 2.5 Mapear cada funcionalidade para os **8 itens da documentação** exigida.
+      enunciado: a introdução (cadastro completo de usuários além do login fixo, notificações
+      além do broadcast, painéis administrativos, balanceamento de carga, métricas) é
+      aspiracional e não aparece nos prints/observação/documentação — fora de escopo.
+      Armazenamento: obrigatório escolher arquivo ou banco (esclarecido em aula) — optamos
+      por arquivo `.txt`.
+- [x] 2.5 Mapear cada funcionalidade para os **8 itens da documentação** exigida, já com as
+      anotações de aula sobre os itens 4 ("ack envio/recebimento"), 5 ("logs/printscreen") e 8
+      ("conclusão do desenvolvimento, dificuldades").
 - [x] 2.6 Registrado em `docs/02_atividades.md` com ordem de implementação e prioridade.
 
 **Pronto ✅.**
@@ -123,24 +148,30 @@ Ações menores:
 Funcionalidades e escopo já destrinchados em `docs/02_atividades.md` (Fase 2).
 
 Ações menores restantes:
-- [ ] 3.3 Definir a **estrutura de dados da fila** (ex.: lista/array de pacientes com ID e Nome)
+- [ ] 3.3 Definir a **estrutura de dados da fila** (lista/array de usuários com ID e Nome)
       protegida por `pthread_mutex_t` (obrigatório com threads — ver `docs/00_estudo_codigos_aula.md`, 5.7).
 - [ ] 3.4 Definir o **protocolo**: cada tipo de mensagem, formato exato dos bytes/campos,
       quem envia, o que espera de resposta. Ex.: `LOGIN`, `ADD ID Nome`, `LIST`, `HEARTBEAT`,
       respostas `LOGIN_OK`, `ALIVE`, etc. Usar o formato de fila confirmado no print
       (`===== FILA =====` / `ID - Nome` / `================`). Escrever em `docs/03_protocolo.md`.
-- [ ] 3.5 Tratar **retransmissão de mensagens** (item 4 da documentação exige isso explicitamente).
-- [ ] 3.6 Definir IP/porta fixos (o print mostra **porta 8080**) e como o cliente os obtém
-      "automaticamente".
-- [ ] 3.7 Implementar Heartbeat conforme **decidido**: apenas pacientes cadastrados por outros
+- [ ] 3.4.1 **Login**: usuário/senha **fixos no código** (confirmado em aula) — definir o par
+      exato de credenciais e como a mensagem `LOGIN` os carrega no protocolo.
+- [ ] 3.5 Tratar **retransmissão de mensagens** com **ACK de envio/recebimento** (anotação de
+      aula para o item 4 da documentação) — desenhar o mecanismo (timeout + reenvio, número de
+      sequência, etc.) e documentar.
+- [ ] 3.6 IP/porta: porta **8080** fixa (do print); IP do servidor como **constante `#define
+      SERVER_IP` no código do cliente** (decidido — servidor e clientes rodam em máquinas
+      diferentes na mesma rede). Antes da apresentação: descobrir o IP real da máquina do
+      servidor (`ip a` / `hostname -I`) e recompilar o cliente com esse valor. **Melhoria futura,
+      se sobrar tempo:** ler o IP de um arquivo texto ao lado do executável, para não precisar
+      recompilar a cada rede diferente.
+- [ ] 3.7 Implementar Heartbeat conforme **decidido**: apenas usuários cadastrados por outros
       clientes desde a última checagem (`ALIVE` se não houver novidade) — documentar no protocolo
       a divergência com o print do enunciado (decisão de implementação, item 3 da doc).
-- [ ] 3.8 Modelar a persistência (`.txt`) separando claramente dois tipos de dado — **decidido
-      por você (27/07)**: dados de **cliente** (sessão/login: usuários, sessões, logs) são
-      diferentes de dados de **paciente** (fila, histórico de inserções). O enunciado lista
-      "usuários; filas; histórico; logs; sessões (dados do cliente que logou)" como o que
-      persistir — "usuários"/"sessões"/"logs" são do **cliente** (software/quem logou), e
-      "filas"/"histórico" são dos **pacientes** (conteúdo da fila).
+- [ ] 3.8 Modelar a persistência (`.txt`) separando claramente dois tipos de dado: dados de
+      **cliente** (sessão/login: usuários-operadores, sessões, logs) e dados de **usuário**
+      (fila, histórico de inserções — o que era "paciente"). O enunciado lista "usuários; filas;
+      histórico; logs; sessões (dados do cliente que logou)" como o que persistir.
 - [ ] 3.9 Escrever `docs/03_especificacao.md` juntando decisões de arquitetura + protocolo.
 
 **Pronto quando:** o protocolo estiver escrito por completo.
@@ -153,19 +184,23 @@ Ações menores (ordem de implementação):
 - [ ] 4.1 `Makefile` mínimo que compila `cliente` e `servidor` com `-lpthread` (montar cedo, testar o `make`).
 - [ ] 4.2 Servidor: criar socket, `SO_REUSEADDR`, `bind` na porta 8080, `listen`, `accept` em laço `while(1)`,
       logando `Servidor iniciado na porta 8080` / `Novo cliente conectado.` / `Cliente desconectado.`.
-- [ ] 4.3 Cliente: `connect` (IPv4, 127.0.0.1:8080 automático), enviar `LOGIN`, receber `LOGIN_OK`, mostrar
-      menu com as opções `1`/`2`/`3`/`0` exatamente como no print.
+- [ ] 4.3 Cliente: `connect` (IPv4, porta 8080, IP do servidor via `#define SERVER_IP` — decidido
+      na seção 6), enviar `LOGIN` com a credencial fixa, receber `LOGIN_OK`, mostrar menu com as
+      opções `1`/`2`/`3`/`0` exatamente como no print (rótulos com "usuário" em vez de "paciente").
+- [ ] 4.3.1 Antes de recompilar para a apresentação: descobrir o IP real da máquina que vai
+      rodar o `servidor` (`ip a` / `hostname -I`) e atualizar `SERVER_IP` no cliente.
 - [ ] 4.4 Servidor: `pthread_create` + `pthread_detach` por cliente conectado (base: `multithread.c`, com a correção do cast via `intptr_t`).
-- [ ] 4.5 Funcionalidade "Adicionar paciente" (ID + Nome) + guardar na fila no servidor, protegida por mutex.
+- [ ] 4.5 Funcionalidade "Adicionar usuário" (ID + Nome) + guardar na fila no servidor, protegida por mutex.
 - [ ] 4.6 Funcionalidade "Ver fila" (servidor devolve a lista formatada: `===== FILA =====` / `ID - Nome` / `================`).
-- [ ] 4.7 **Broadcast** direto para todos os clientes ao adicionar paciente, mantendo a lista
-      de cada um atualizada em tempo real (`[Broadcast] Novo paciente: <nome>`).
-- [ ] 4.8 **Heartbeat**: devolve os pacientes cadastrados por **outros** clientes desde a última
+- [ ] 4.7 **Broadcast** direto para todos os clientes ao adicionar usuário, mantendo a lista
+      de cada um atualizada em tempo real (`[Broadcast] Novo usuário: <nome>`).
+- [ ] 4.8 **Heartbeat**: devolve os usuários cadastrados por **outros** clientes desde a última
       checagem, ou `ALIVE` se não houver novidade (decidido — ver seção 6).
 - [ ] 4.9 "Sair" limpo (fechar socket, servidor detecta desconexão via `recv() <= 0`).
-- [ ] 4.10 Modularizar (`.c`/`.h`) e comentar — a avaliação cobra organização e modularidade.
-- [ ] 4.11 **Persistência em arquivo `.txt`** (opcional pelo enunciado, mas **decidido manter**):
-      grava dados de **cliente** (usuários/sessões/logs — quem logou) e dados de **paciente**
+- [ ] 4.10 **Retransmissão de mensagens via ACK** (envio/recebimento confirmado) — item 4 da documentação.
+- [ ] 4.11 Modularizar (`.c`/`.h`) e comentar — a avaliação cobra organização e modularidade.
+- [ ] 4.12 **Persistência em arquivo `.txt`** (escolhida no lugar do banco): grava dados de
+      **cliente** (usuários-operadores/sessões/logs — quem logou) e dados de **usuário**
       (filas/histórico — conteúdo da fila), como dois conjuntos de dados distintos.
 
 **Pronto quando:** cliente e servidor reproduzem o comportamento dos prints ponta a ponta.
@@ -175,7 +210,8 @@ Ações menores (ordem de implementação):
 ### FASE 5 — Testar e validar
 
 Ações menores:
-- [ ] 5.1 Teste funcional manual: dois clientes, reproduzir a sequência dos prints do PDF.
+- [ ] 5.1 Teste funcional manual: dois clientes, reproduzir a sequência dos prints do PDF (adaptada
+      para "usuário").
 - [ ] 5.2 Escrever o **gerador automático de clientes** (base: `porta.c` — mesma lógica de laço
       `socket()`/`connect()`/`close()`, trocando "variar porta" por "repetir N vezes na porta 8080").
       O enunciado permite explicitamente um 2º código cliente com parâmetro `100`/`1000`/`10000`.
@@ -183,7 +219,8 @@ Ações menores:
       todas as conexões.
 - [ ] 5.4 Verificar com **Wireshark** que o tráfego bate com o protocolo documentado.
 - [ ] 5.5 Testar casos especiais (cliente cai no meio, IDs repetidos, fila vazia no Heartbeat).
-- [ ] 5.6 Registrar tudo em `docs/05_plano_testes.md` com prints e análise (itens 5, 6 e 7 da doc).
+- [ ] 5.6 Registrar tudo em `docs/05_plano_testes.md` com **logs e prints** (anotação de aula
+      para o item 5) e análise (itens 5, 6 e 7 da doc).
 
 **Pronto quando:** os três testes de carga passam com prints salvos e o tráfego confere no Wireshark.
 
@@ -197,7 +234,11 @@ Ações menores:
       motivo real (prazo) e os motivos técnicos (fila compartilhada nativa, familiaridade prévia).
 - [ ] 6.3 Saber explicar o protocolo e como o Wireshark o veria.
 - [ ] 6.4 Antecipar perguntas do professor e ensaiar respostas.
-- [ ] 6.5 Registrar em `docs/06_estudo_aprofundado.md` (serve de cola para a apresentação).
+- [ ] 6.5 Escrever a conclusão da documentação cobrindo **desenvolvimento e dificuldades**
+      (anotação de aula, item 8), em **nível acadêmico** (padrão dos relatórios de bolsa).
+- [ ] 6.6 Definir as **referências bibliográficas** do item 8 (provavelmente os 2 links de
+      Makefile do enunciado + fontes técnicas usadas — confirmar).
+- [ ] 6.7 Registrar em `docs/06_estudo_aprofundado.md` (serve de cola para a apresentação).
 
 **Pronto quando:** você conseguir explicar qualquer linha do código sem consultar.
 
@@ -206,22 +247,24 @@ Ações menores:
 ## 4. Documentação final (o PDF obrigatório)
 
 O PDF de documentação precisa conter **os 8 itens** abaixo. Vamos preenchendo ao longo das fases,
-não tudo no fim. Mapeamento item → fase que gera o conteúdo:
+não tudo no fim. Mapeamento item → fase que gera o conteúdo, já com as anotações de aula:
 
-| # | Item exigido | Fase que alimenta |
-|---|---|---|
-| 1 | Sumário do problema | 2 |
-| 2 | Descrição dos algoritmos, TADs, funções e decisões | 3, 4 |
-| 3 | Decisões de implementação omissas na especificação | 3, 4 |
-| 4 | Como foi tratada a **retransmissão de mensagens** | 3 |
-| 5 | Testes + análise | 5 |
-| 6 | Teste de carga 100/1000/10000 (geração automática) + prints | 5 |
-| 7 | Prints do funcionamento correto de cliente e servidor | 4, 5 |
-| 8 | Conclusão e referências bibliográficas | 6 |
+| # | Item exigido | Anotação de aula | Fase que alimenta |
+|---|---|---|---|
+| 1 | Sumário do problema | — | 2 |
+| 2 | Descrição dos algoritmos, TADs, funções e decisões | — | 3, 4 |
+| 3 | Decisões de implementação omissas na especificação | — | 3, 4 |
+| 4 | Como foi tratada a **retransmissão de mensagens** | **ack envio/recebimento** | 3 |
+| 5 | Testes + análise | **logs/printscreen** | 5 |
+| 6 | Teste de carga 100/1000/10000 (geração automática) + prints | — | 5 |
+| 7 | Prints do funcionamento correto de cliente e servidor | — | 4, 5 |
+| 8 | Conclusão e referências bibliográficas | **conclusão do desenvolvimento, dificuldades**; referências ainda a definir | 6 |
 
-Referências dadas pelo enunciado (para o Makefile):
+Referências dadas pelo enunciado (para o Makefile, entram no item 8):
 - http://www.gnu.org/software/make/manual/make.html
 - http://www.cs.colby.edu/maxwell/courses/tutorials/maketutor/
+
+> **Nível do relatório:** acadêmico, no padrão dos relatórios de bolsa do Victor (anotação de aula).
 
 ---
 
@@ -267,10 +310,13 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 | 23/07 | Técnica de concorrência ainda em aberto, mas análise favorece **threads** | Threads escalam melhor no teste de 10000 E facilitam o estado compartilhado da fila (mesmo processo) | 1 |
 | 27/07 | Repositório atualizado: mais 2 arquivos em `codigos_aula/` (`escrevendo.c`, `porta.c`) + 1 arquivo de multiplexação em `Redes_Computadores/` (`servidor_multiplexacao.c`, origem não confirmada) | Estudo teórico revisado para cobrir os 7 arquivos | 1 |
 | **27/07** | **Decisão final: threads (`pthreads`)** | Restam 1,5 dia até a entrega. Threads é a técnica que o aluno já domina de disciplinas de SO, está 100% confirmada como ensinada pelo Rubens (`multithread.c`), e resolve fila compartilhada + broadcast sem IPC — só exige mutex. Multiplexação (`select`) foi descartada apesar de escalar melhor e não exigir mutex: técnica desconhecida do aluno e com origem não confirmada como material do professor — risco de cronograma e de defesa oral incompatível com o prazo. Fork foi descartado: fila compartilhada exigiria IPC, não ensinado em aula. | 3 |
-| 27/07 | **Correção de escopo:** o enunciado marca a persistência **inteira** (arquivo OU banco) como não obrigatória — não só o banco, como registrado em 23/07 | Leitura direta de `trabalho_redes_2026.pdf`, seção SISTEMAS: "Gravação em Arquivo / Banco de Dados (não obrigatório)" | 2 |
-| **27/07** | **Persistência: mantida** (arquivo `.txt`), mesmo sendo opcional | Esforço baixo (mutex da fila já existe), cobre histórico/logs/sessões citados na introdução | 2 |
-| **27/07** | **Heartbeat: segue o texto da observação**, não o print | O print do enunciado mostra o Heartbeat devolvendo a fila inteira, mas você confirmou que o comportamento correto é a lista de pacientes cadastrados por **outros** clientes desde a última checagem (`ALIVE` se não houver novidade). Divergência do print a documentar como decisão de implementação (item 3 da doc) | 3 |
-| **27/07** | **Modelo de dados esclarecido: "cliente" ≠ "paciente"** | Você confirmou: os dados armazenados na persistência (usuários, sessões, logs) são do **cliente** (o software/sessão que fez login) — não dos **pacientes** (que são o conteúdo da fila, ID+Nome). O broadcast distribui a lista atualizada diretamente para todos os clientes | 3 |
+| 27/07 | ~~Correção de escopo: persistência inteira seria opcional~~ **revisado de novo:** Rubens esclareceu em aula que é obrigatório escolher banco OU arquivo | Leitura isolada do PDF ("não obrigatório") sugeria que dava pra pular; anotação de aula corrigiu isso | 2 |
+| **27/07** | **Persistência: arquivo `.txt`** (não banco) | Mais básico, esforço baixo com threads (mutex da fila já existe), cobre histórico/logs/sessões citados na introdução | 2 |
+| **27/07** | **Heartbeat: segue o texto da observação**, não o print | O print do enunciado mostra o Heartbeat devolvendo a fila inteira, mas o comportamento correto é a lista de usuários cadastrados por **outros** clientes desde a última checagem (`ALIVE` se não houver novidade). Divergência do print a documentar como decisão de implementação (item 3 da doc) | 3 |
+| **27/07** | **Terminologia: "paciente" (do print) → "usuário" (nosso sistema)** | O texto do enunciado já usa "usuário" (observação do Heartbeat, introdução); só o print de exemplo usa "paciente". Confirmado em aula. "Cliente" continua sendo um conceito à parte: a sessão/software que loga | 2 |
+| **27/07** | **Login: usuário/senha fixos, hardcoded no código** | Confirmado em aula ("deixar no código"; "senha já está no código" no LOGIN_OK) — não é autenticação dinâmica contra arquivo/BD | 3 |
+| **27/07** | **Retransmissão de mensagens via ACK de envio/recebimento** | Anotação de aula para o item 4 da documentação | 3 |
+| **27/07** | **IP do servidor fixo no código (`#define SERVER_IP`)**, não descoberta dinâmica | Confirmado: servidor roda numa máquina, clientes em outras, mesma rede. Nenhum código de aula do Rubens faz descoberta de rede (todos usam IP literal) — implementar isso do zero seria fora do escopo ensinado e arriscado com 1,5 dia restante. Solução: recompilar o cliente com o IP certo antes de cada teste/apresentação. **Se sobrar tempo:** melhorar para ler o IP de um arquivo texto (não recompila) | 3 |
 
 ---
 
@@ -280,21 +326,30 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 - [x] ~~Decidir a técnica de concorrência~~ — **decidido: threads (27/07)**.
 - [x] ~~Corrigir menções a "4 arquivos" em `docs/01_analise_codigos_aula.md`~~ — corrigido em 27/07.
 - [x] ~~Montar `docs/02_atividades.md` sem acesso ao PDF~~ — revisado em 27/07 com leitura direta do PDF.
-- [x] ~~Persistência: manter ou cortar?~~ — **decidido manter**, em arquivo `.txt` (27/07).
-- [x] ~~Heartbeat: texto ou print?~~ — **decidido seguir o texto** da observação (27/07); divergência do
+- [x] ~~Persistência: manter ou cortar?~~ — **decidido manter, em arquivo `.txt`** (esclarecido em aula: não é opcional escolher nenhum dos dois).
+- [x] ~~Heartbeat: texto ou print?~~ — **decidido seguir o texto** da observação; divergência do
       print vira decisão de implementação documentada (item 3 da doc).
-- [x] ~~Modelo de dados da persistência~~ — **esclarecido (27/07):** "cliente" (usuários/sessões/logs —
-      quem logou) é diferente de "paciente" (filas/histórico — conteúdo da fila).
-- [ ] Confirmar detalhes do login: autenticação real (validar usuário/senha em arquivo) ou apenas
-      `LOGIN_OK` fixo como no print? O print não mostra troca de credenciais — resolver ao escrever
-      o protocolo (Fase 3).
+- [x] ~~Modelo de dados da persistência~~ — **esclarecido:** "cliente" (usuários-operadores/sessões/logs)
+      é diferente de "usuário" (ex-"paciente": filas/histórico — conteúdo da fila).
+- [x] ~~Mecanismo de login~~ — **decidido: usuário/senha fixos, hardcoded no código** (anotação de aula).
+- [x] ~~Terminologia "paciente" vs. "usuário"~~ — **decidido: usar "usuário"** no nosso sistema.
+- [x] ~~Mecanismo de retransmissão~~ — **decidido: ACK de envio/recebimento** (anotação de aula,
+      detalhamento técnico ainda a fazer na Fase 3).
+- [x] ~~"Testado em máquinas diferentes": muda o requisito de IP/porta?~~ — **confirmado por você:**
+      servidor num PC, clientes em outros PCs, mesma rede. **Decidido: IP fixo no código**
+      (`#define SERVER_IP`), recompilando antes de cada apresentação/teste em rede nova. Melhoria
+      futura (se sobrar tempo): ler o IP de um arquivo texto.
+- [ ] Referências bibliográficas do item 8: prováveis (links de Makefile do enunciado + fontes
+      técnicas), a confirmar na Fase 6. Baixa prioridade agora.
 - [ ] Confirmar a origem de `Redes_Computadores/` (os 4 arquivos corrigidos + `servidor_multiplexacao.c`):
       são do Rubens também, ou foram adaptados/corrigidos pelo aluno? Não bloqueia mais a decisão de
       concorrência, mas afeta como citar essas fontes na documentação final (item 8).
 
 ---
 
-*Última atualização: 27/07/2026 — Fase 2 concluída e revisada após leitura direta do enunciado;
-persistência mantida (.txt) e heartbeat decidido (segue o texto, não o print); modelo de dados
-cliente vs. paciente esclarecido; `docs/01_analise_codigos_aula.md` corrigido; técnica de
-concorrência decidida (threads); cronograma ajustado para 1,5 dia restante.*
+*Última atualização: 27/07/2026 — incorporadas anotações de aula do Rubens: terminologia
+("usuário" no lugar de "paciente"), login (credenciais fixas no código), persistência
+(obrigatório escolher, optamos por arquivo), retransmissão (ACK), detalhes dos itens 4/5/8
+da documentação, e confirmação de que servidor e clientes rodam em máquinas diferentes na
+mesma rede — decidido IP fixo no código (`#define SERVER_IP`), com melhoria futura opcional
+para ler de arquivo. Fase 3 pronta para começar sem pendências bloqueantes.*
