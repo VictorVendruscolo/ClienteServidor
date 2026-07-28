@@ -15,7 +15,7 @@ das anotações.*
 | F2 | **Menu principal** | Exibido após login, com **4 opções numeradas exatamente assim**: `1 - Adicionar usuário`, `2 - Ver fila`, `3 - Heartbeat`, `0 - Sair` (o print usa "paciente" e numeração 1/2/3/0 — nosso sistema usa "usuário", mesma numeração). | Obrigatória |
 | F3 | **Adicionar usuário** | Cliente informa `ID` e `Nome` (ex.: `ID: 20`, `Nome: Carlos`); servidor confirma com `Usuário <nome> adicionado.`, guarda na fila compartilhada (protegida por `pthread_mutex_t`, técnica = threads) e dispara broadcast. (Print usa "paciente" — nosso sistema usa "usuário".) | Obrigatória |
 | F4 | **Ver fila** | Servidor devolve a lista formatada. Formato exato visto no print: cabeçalho `===== FILA =====`, uma linha por usuário `ID - Nome`, rodapé `================`. | Obrigatória |
-| F5 | **Broadcast** | Ao adicionar usuário, o servidor distribui **diretamente para todos os clientes** conectados a lista atualizada, de forma assíncrona (chega no meio da tela, sem o cliente pedir): `[Broadcast] Novo usuário: <nome>` (print usa "paciente"). | Obrigatória |
+| F5 | **Broadcast** | Ao adicionar usuário, o servidor envia **diretamente a todos os clientes conectados, exceto o autor**, uma notificação assíncrona com o nome do novo usuário (chega no meio da tela, sem o cliente pedir): `[Broadcast] Novo usuário: <nome>` (print usa "paciente"). **Correção de 28/07:** a redação anterior dizia "a lista atualizada", o que contradizia o próprio formato da mensagem e o print do enunciado — o que trafega é a notificação do novo usuário, não a fila inteira. Ver nota de terminologia abaixo. | Obrigatória |
 | F6 | **Heartbeat** | **Decidido:** segue a definição textual do enunciado (observação) — devolve a lista de usuários cadastrados por **outros** clientes desde a última checagem; se não houve novidade, devolve `ALIVE`. O print do 2º cliente mostra a fila inteira (não só os de outros), mas essa divergência **não** será reproduzida — documentar a escolha como decisão de implementação (item 3 da doc). | Obrigatória |
 | F7 | **Sair** | Fecha a conexão de forma limpa; servidor detecta a desconexão via `recv() <= 0`. | Obrigatória |
 | F8 | **Log de conexão/desconexão no servidor** | O servidor imprime no próprio terminal `Servidor iniciado na porta 8080`, `Novo cliente conectado.` e `Cliente desconectado.` a cada evento. Aparece no print (tela do servidor) — não é interno/opcional. | Obrigatória |
@@ -28,6 +28,14 @@ usuários completo além do login fixo, notificações "em tempo real" no sentid
 broadcast já coberto, painéis administrativos, balanceamento de carga, métricas): não aparecem
 nos prints, na "Observação", nem nos 8 itens da documentação. Tratados como **fora de escopo**
 dado o prazo de 1,5 dia.
+
+**Nota sobre "atualizar filas em tempo real" (responsabilidade do cliente no enunciado).**
+O enunciado lista, entre as responsabilidades do cliente, "atualizar filas em tempo real".
+Isso foi implementado como **notificação**, não como réplica da fila: o cliente não mantém
+uma cópia local da fila; ele é avisado imediatamente de cada inserção pelo broadcast e pode
+pedir a fila completa a qualquer momento com a opção `2`. A decisão segue o print do
+enunciado, que mostra exatamente `[Broadcast] Novo paciente: Carlos` — o nome do novo
+registro, e não a lista inteira. Registrar no item 3 da documentação final.
 
 **Nota de terminologia:** este documento usa "usuário" onde o print original do enunciado usa
 "paciente" (ex.: "Adicionar paciente" → "Adicionar usuário"). Decisão confirmada em aula — ver

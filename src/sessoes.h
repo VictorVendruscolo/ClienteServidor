@@ -85,9 +85,4 @@ void sessoes_trava_envio(int id_sessao);
  */
 void sessoes_libera_envio(int id_sessao);
 
-/*
- * Retorna quantos clientes estao autenticados neste instante.
- */
-int sessoes_conectadas(void);
-
 #endif /* SESSOES_H */

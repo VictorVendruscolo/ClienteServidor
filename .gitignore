@@ -1,0 +1,19 @@
+# ---------------------------------------------------------------------------
+# Arquivos que NAO devem ser versionados nem entrar no zip da entrega.
+# O enunciado exige apenas os fontes (.c, .h) e o Makefile: sem executaveis
+# e sem arquivos objeto.
+# ---------------------------------------------------------------------------
+
+# Executaveis gerados pelo make
+src/cliente
+src/servidor
+src/carga
+
+# Arquivos objeto
+*.o
+
+# Dados gerados durante a execucao do servidor
+src/dados/
+
+# Configuracao local de ferramentas
+.claude/

@@ -205,9 +205,16 @@ uma decisão registrada na especificação, e é o que os prints do enunciado su
 arquivos de log e histórico continuam existindo entre execuções.
 
 **Como você gerou 10000 clientes?** Um segundo programa (`carga.c`), que o enunciado permite
-expressamente. Ele repete `socket()` + `connect()` N vezes — a mesma estrutura de laço do
-`porta.c` da aula, trocando "variar a porta" por "repetir na mesma porta" — e mantém todas
-as conexões abertas até eu apertar ENTER, para dar tempo de capturar a tela.
+expressamente. Ele repete `socket()` + `connect()` + login N vezes — a mesma estrutura de
+laço do `porta.c` da aula, trocando "variar a porta" por "repetir na mesma porta" — e
+mantém todas as conexões abertas até eu apertar ENTER, para dar tempo de capturar a tela.
+Cada cliente gerado se autentica, então ocupa uma sessão no servidor igual a um `./cliente`.
+
+**Por que as linhas do log não saem em ordem numérica perfeita?** Porque cada conexão é
+atendida por uma thread diferente, e a ordem em que elas escrevem no terminal depende de
+qual thread o sistema escalona primeiro. O número entre colchetes é atribuído na aceitação
+da conexão, então a contagem está correta mesmo quando `[#99]` aparece depois de `[#100]`.
+Isso é, na verdade, uma evidência visual de que o servidor é concorrente.
 
 **E se a fila encher?** O `fila_adiciona` devolve um código de fila cheia e o servidor
 responde com `ERRO Fila cheia`, sem derrubar nada. O limite é 20000, definido em `comum.h`.
@@ -234,7 +241,8 @@ no item 3 da documentação, como o próprio enunciado exige.
 6. No cliente A: opção `3` (heartbeat) — devolve só o `Carlos`, cadastrado pelo outro.
    Repita a opção `3` — agora devolve `ALIVE`. **Isso demonstra a regra do enunciado.**
 7. Mostre `dados/fila.txt` e `dados/historico.txt` — a persistência.
-8. `./carga 1000` — mostre a tela do servidor com as conexões numeradas.
+8. `./carga 1000` — **reinicie o servidor antes**, para a numeração começar em `[#1]`, e
+   mostre a tela dele com as conexões numeradas de `[#1]` a `[#1000]`.
 9. Se houver Wireshark, siga o *TCP Stream* de uma conexão e compare com a tabela de
    mensagens da documentação.
 

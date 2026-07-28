@@ -41,7 +41,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-#include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sched.h>
@@ -65,10 +64,8 @@
 /* Quantos usuarios sao copiados da fila por vez ao enviar um bloco. */
 #define LOTE_ENVIO 32
 
-/* Tamanho do cache de resposta usado para detectar comandos repetidos.
- * Guarda apenas respostas curtas (ADD_OK, ALIVE, ERRO); blocos de fila sao
- * recalculados quando necessario. */
-#define TAM_CACHE_RESPOSTA 256
+/* Tamanho do texto guardado da resposta do ultimo ADD. */
+#define TAM_RESPOSTA_ADD 256
 
 /* Resultado da verificacao do numero de sequencia de um comando. */
 #define SEQ_NOVA     0
@@ -98,11 +95,17 @@ typedef struct {
     int  id_sessao;
 
     int  seq_ultimo;                        /* ultima sequencia processada  */
-    char resposta_cache[TAM_CACHE_RESPOSTA];/* resposta correspondente      */
-    int  cache_valido;                      /* 1 se resposta_cache serve    */
 
-    int  indice_visto;                      /* ate onde este cliente ja viu */
-    int  indice_visto_antes;                /* valor anterior, para reenvio */
+    /* Guarda a resposta do ultimo ADD. O ADD e o unico comando que altera a
+     * fila, entao e o unico que nao pode ser executado duas vezes: se ele
+     * chegar repetido, devolvemos este texto em vez de inserir de novo. */
+    char ultima_resposta_add[TAM_RESPOSTA_ADD];
+    int  resposta_add_valida;
+
+    /* Trecho da fila devolvido no ultimo HEARTBEAT. Guardar os dois limites
+     * permite repetir exatamente a mesma resposta se o comando for reenviado. */
+    int  indice_visto;                      /* fim do trecho (ja visto)     */
+    int  indice_visto_antes;                /* inicio do trecho             */
 } EstadoConexao;
 
 /* Contador de conexoes aceitas, usado para numerar as linhas de log e tornar
@@ -166,8 +169,12 @@ static int envia_bloco_fila(EstadoConexao *estado, int inicio, int fim)
         }
 
         for (i = 0; i < copiados && !erro; i++) {
-            if (protocolo_envia_fmt(estado->sock, "%d - %s",
-                                    lote[i].id, lote[i].nome) != 0) {
+            char linha[TAM_LINHA];
+
+            snprintf(linha, sizeof(linha), "%d - %s",
+                     lote[i].id, lote[i].nome);
+
+            if (protocolo_envia_linha(estado->sock, linha) != 0) {
                 erro = 1;
             }
         }
@@ -183,16 +190,16 @@ static int envia_bloco_fila(EstadoConexao *estado, int inicio, int fim)
 }
 
 /*
- * Guarda uma resposta curta no cache da conexao, para o caso de o cliente
- * reenviar o mesmo comando por falta de resposta (ver retransmissao).
+ * Guarda o texto da resposta de um ADD, para poder devolve-lo caso o mesmo
+ * comando chegue de novo por causa de um reenvio.
  */
-static void guarda_cache(EstadoConexao *estado, const char *resposta)
+static void guarda_resposta_add(EstadoConexao *estado, const char *resposta)
 {
-    if (strlen(resposta) < TAM_CACHE_RESPOSTA) {
-        strcpy(estado->resposta_cache, resposta);
-        estado->cache_valido = 1;
+    if (strlen(resposta) < TAM_RESPOSTA_ADD) {
+        strcpy(estado->ultima_resposta_add, resposta);
+        estado->resposta_add_valida = 1;
     } else {
-        estado->cache_valido = 0;
+        estado->resposta_add_valida = 0;
     }
 }
 
@@ -241,6 +248,11 @@ static int nome_valido(const char *nome)
     if (nome == NULL || nome[0] == '\0') {
         return 0;
     }
+    /* Nomes acima do limite sao recusados, e nao cortados: assim o cliente
+     * nunca recebe a confirmacao de um nome diferente do que enviou. */
+    if (strlen(nome) >= TAM_NOME) {
+        return 0;
+    }
     for (i = 0; nome[i] != '\0'; i++) {
         unsigned char c = (unsigned char) nome[i];
         if (c < 32 || c == 127) {
@@ -262,11 +274,10 @@ static int nome_valido(const char *nome)
  * clientes por broadcast. O nome pode conter espacos: e todo o restante da
  * linha depois do identificador.
  */
-static int trata_add(EstadoConexao *estado, const char *args)
+static int trata_add(EstadoConexao *estado, const char *linha)
 {
-    char        resposta[TAM_CACHE_RESPOSTA];
+    char        resposta[TAM_RESPOSTA_ADD];
     char        aviso[TAM_LINHA];
-    char        nome_armazenado[TAM_NOME];
     const char *nome;
     int         seq = 0;
     int         id  = 0;
@@ -274,15 +285,20 @@ static int trata_add(EstadoConexao *estado, const char *args)
     int         indice;
     int         situacao;
 
-    /* "%n" guarda quantos caracteres foram consumidos ate ali, permitindo
-     * tratar o resto da linha como nome (inclusive com espacos). */
-    if (sscanf(args, "%d %d %n", &seq, &id, &deslocamento) < 2) {
+    /* "%*s" pula o comando ADD sem guardar nada, e "%n" anota quantos
+     * caracteres ja foram lidos - assim o resto da linha e o nome, que pode
+     * conter espacos. */
+    if (sscanf(linha, "%*s %d %d %n", &seq, &id, &deslocamento) < 2) {
         return envia_resposta(estado, RESP_ERRO " Formato esperado: ADD <seq> <id> <nome>");
     }
 
-    nome = args + deslocamento;
+    if (id <= 0) {
+        return envia_resposta(estado, RESP_ERRO " O identificador deve ser um numero positivo");
+    }
+
+    nome = linha + deslocamento;
     if (deslocamento == 0 || !nome_valido(nome)) {
-        return envia_resposta(estado, RESP_ERRO " Nome invalido ou ausente");
+        return envia_resposta(estado, RESP_ERRO " Nome invalido, vazio ou longo demais");
     }
 
     situacao = verifica_sequencia(estado, seq);
@@ -292,19 +308,11 @@ static int trata_add(EstadoConexao *estado, const char *args)
     }
     if (situacao == SEQ_REPETIDA) {
         /* Reenvio: devolve a resposta anterior sem inserir de novo. */
-        if (estado->cache_valido) {
-            return envia_resposta(estado, estado->resposta_cache);
+        if (estado->resposta_add_valida) {
+            return envia_resposta(estado, estado->ultima_resposta_add);
         }
         return envia_resposta(estado, RESP_ERRO " Comando repetido sem resposta armazenada");
     }
-
-    /* Nomes maiores que o limite sao reduzidos AQUI, uma unica vez. A partir
-     * deste ponto todo o sistema - fila, historico, broadcast e resposta ao
-     * cliente - usa o mesmo texto, evitando que o cliente receba a confirmacao
-     * de um nome diferente do que foi realmente armazenado. */
-    strncpy(nome_armazenado, nome, TAM_NOME - 1);
-    nome_armazenado[TAM_NOME - 1] = '\0';
-    nome = nome_armazenado;
 
     indice = fila_adiciona(id, nome);
     estado->seq_ultimo = seq;
@@ -312,7 +320,7 @@ static int trata_add(EstadoConexao *estado, const char *args)
     if (indice == FILA_CHEIA) {
         snprintf(resposta, sizeof(resposta), "%s Fila cheia (limite de %d usuarios)",
                  RESP_ERRO, MAX_USUARIOS_FILA);
-        guarda_cache(estado, resposta);
+        guarda_resposta_add(estado, resposta);
         return envia_resposta(estado, resposta);
     }
 
@@ -331,7 +339,7 @@ static int trata_add(EstadoConexao *estado, const char *args)
     sessoes_broadcast(estado->id_sessao, aviso);
 
     snprintf(resposta, sizeof(resposta), "%s %d %s", RESP_ADD_OK, id, nome);
-    guarda_cache(estado, resposta);
+    guarda_resposta_add(estado, resposta);
 
     return envia_resposta(estado, resposta);
 }
@@ -343,12 +351,12 @@ static int trata_add(EstadoConexao *estado, const char *args)
  * produz o mesmo efeito, por isso um comando repetido e simplesmente
  * recalculado.
  */
-static int trata_list(EstadoConexao *estado, const char *args)
+static int trata_list(EstadoConexao *estado, const char *linha)
 {
     int seq = 0;
     int situacao;
 
-    if (sscanf(args, "%d", &seq) != 1) {
+    if (sscanf(linha, "%*s %d", &seq) != 1) {
         return envia_resposta(estado, RESP_ERRO " Formato esperado: LIST <seq>");
     }
 
@@ -357,8 +365,11 @@ static int trata_list(EstadoConexao *estado, const char *args)
         return envia_resposta(estado, RESP_ERRO " Numero de sequencia invalido");
     }
 
-    estado->seq_ultimo   = seq;
-    estado->cache_valido = 0;   /* blocos de fila nao cabem no cache */
+    estado->seq_ultimo = seq;
+
+    /* A resposta guardada vale apenas para o ultimo comando; qualquer outro
+     * comando a descarta. */
+    estado->resposta_add_valida = 0;
 
     return envia_bloco_fila(estado, 0, fila_tamanho());
 }
@@ -369,19 +380,19 @@ static int trata_list(EstadoConexao *estado, const char *args)
  * Devolve os usuarios cadastrados por OUTROS clientes desde a ultima
  * verificacao deste cliente. Nao havendo novidade, responde ALIVE.
  *
- * Diferente do LIST, este comando altera estado (o marcador do que ja foi
- * visto). Por isso, no caso de reenvio, o intervalo e recalculado a partir do
- * marcador anterior - guardado em indice_visto_antes -, de modo que o cliente
- * receba exatamente a mesma resposta de antes.
+ * O trecho a devolver e guardado em dois marcadores. Um comando novo avanca
+ * esses marcadores; um comando repetido mantem os mesmos e, por isso, produz
+ * exatamente a mesma resposta de antes - inclusive ALIVE, que e o que sai
+ * quando o trecho fica vazio.
  */
-static int trata_heartbeat(EstadoConexao *estado, const char *args)
+static int trata_heartbeat(EstadoConexao *estado, const char *linha)
 {
     int seq = 0;
     int situacao;
     int inicio;
     int fim;
 
-    if (sscanf(args, "%d", &seq) != 1) {
+    if (sscanf(linha, "%*s %d", &seq) != 1) {
         return envia_resposta(estado, RESP_ERRO " Formato esperado: HEARTBEAT <seq>");
     }
 
@@ -390,29 +401,20 @@ static int trata_heartbeat(EstadoConexao *estado, const char *args)
         return envia_resposta(estado, RESP_ERRO " Numero de sequencia invalido");
     }
 
-    if (situacao == SEQ_REPETIDA) {
-        if (estado->cache_valido) {
-            return envia_resposta(estado, estado->resposta_cache);
-        }
-        /* A resposta anterior era um bloco de fila: recalcula do marcador
-         * anterior, devolvendo o mesmo intervalo. */
-        return envia_bloco_fila(estado, estado->indice_visto_antes,
-                                estado->indice_visto);
+    if (situacao == SEQ_NOVA) {
+        /* Comando novo: o trecho vai do ponto ja visto ate o fim atual da fila. */
+        estado->indice_visto_antes  = estado->indice_visto;
+        estado->indice_visto        = fila_tamanho();
+        estado->seq_ultimo          = seq;
+        estado->resposta_add_valida = 0;
     }
 
-    estado->seq_ultimo = seq;
-
-    inicio = estado->indice_visto;
-    fim    = fila_tamanho();
+    inicio = estado->indice_visto_antes;
+    fim    = estado->indice_visto;
 
     if (fim <= inicio) {
-        guarda_cache(estado, RESP_ALIVE);
-        return envia_resposta(estado, RESP_ALIVE);
+        return envia_resposta(estado, RESP_ALIVE);   /* nada novo */
     }
-
-    estado->indice_visto_antes = inicio;
-    estado->indice_visto       = fim;
-    estado->cache_valido       = 0;
 
     return envia_bloco_fila(estado, inicio, fim);
 }
@@ -445,16 +447,14 @@ static int autentica(int sock, LeitorLinha *leitor)
     char comando[32];
     char usuario[64];
     char senha[64];
-    const char *args;
 
     if (protocolo_le_linha(leitor, linha, sizeof(linha)) != LINHA_OK) {
         return SEM_TENTATIVA;
     }
 
-    args = protocolo_separa_comando(linha, comando, sizeof(comando));
-
-    if (strcmp(comando, CMD_LOGIN) != 0 ||
-        sscanf(args, "%63s %63s", usuario, senha) != 2 ||
+    /* A linha precisa ter as tres partes e a credencial precisa conferir. */
+    if (sscanf(linha, "%31s %63s %63s", comando, usuario, senha) != 3 ||
+        strcmp(comando, CMD_LOGIN)     != 0 ||
         strcmp(usuario, LOGIN_USUARIO) != 0 ||
         strcmp(senha,   LOGIN_SENHA)   != 0) {
 
@@ -540,31 +540,31 @@ static void *atende_cliente(void *argumento)
 
     /* --- 3) Laco de comandos ---------------------------------------------- */
     for (;;) {
-        const char *args;
-        int         leitura = protocolo_le_linha(&leitor, linha, sizeof(linha));
+        int leitura = protocolo_le_linha(&leitor, linha, sizeof(linha));
 
         if (leitura != LINHA_OK) {
             break;    /* cliente fechou a conexao ou enviou linha invalida */
         }
 
-        args = protocolo_separa_comando(linha, comando, sizeof(comando));
+        /* A primeira palavra da linha e o comando. */
+        if (sscanf(linha, "%31s", comando) != 1) {
+            continue;              /* linha em branco: ignorada */
+        }
 
         if (strcmp(comando, CMD_ADD) == 0) {
-            if (trata_add(&estado, args) != 0) {
+            if (trata_add(&estado, linha) != 0) {
                 break;
             }
         } else if (strcmp(comando, CMD_LIST) == 0) {
-            if (trata_list(&estado, args) != 0) {
+            if (trata_list(&estado, linha) != 0) {
                 break;
             }
         } else if (strcmp(comando, CMD_HEARTBEAT) == 0) {
-            if (trata_heartbeat(&estado, args) != 0) {
+            if (trata_heartbeat(&estado, linha) != 0) {
                 break;
             }
         } else if (strcmp(comando, CMD_SAIR) == 0) {
             break;
-        } else if (comando[0] == '\0') {
-            continue;    /* linha em branco: ignorada */
         } else {
             if (envia_resposta(&estado, RESP_ERRO " Comando desconhecido") != 0) {
                 break;
@@ -671,9 +671,7 @@ int main(void)
         if (novo_socket < 0) {
             /* Uma falha ao aceitar (inclusive falta de descritores livres) nao
              * derruba o servidor: registra e volta a aceitar conexoes. */
-            if (errno != EINTR) {
-                perror("Erro no accept");
-            }
+            perror("Erro no accept");
             continue;
         }
 

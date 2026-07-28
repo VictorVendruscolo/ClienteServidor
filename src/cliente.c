@@ -39,9 +39,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <errno.h>
-#include <limits.h>
 #include <signal.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -331,34 +329,6 @@ static int nome_valido(const char *nome)
     return 1;
 }
 
-/*
- * Converte um texto em numero inteiro, recusando tudo que nao seja um numero
- * completo e valido (evita que "12abc" ou "" virem um identificador).
- * Retorna 1 em caso de sucesso.
- */
-static int converte_inteiro(const char *texto, int *destino)
-{
-    char *fim = NULL;
-    long  valor;
-
-    if (texto[0] == '\0') {
-        return 0;
-    }
-
-    errno = 0;
-    valor = strtol(texto, &fim, 10);
-
-    if (errno != 0 || fim == texto || *fim != '\0') {
-        return 0;
-    }
-    if (valor < INT_MIN || valor > INT_MAX) {
-        return 0;
-    }
-
-    *destino = (int) valor;
-    return 1;
-}
-
 /* ===========================================================================
  * Operacoes do menu
  * ===========================================================================
@@ -371,7 +341,6 @@ static int converte_inteiro(const char *texto, int *destino)
 static int opcao_adicionar_usuario(int sequencia)
 {
     char entrada[TAM_LINHA];
-    char nome[TAM_NOME];
     char comando[TAM_LINHA];
     int  id = 0;
 
@@ -380,8 +349,8 @@ static int opcao_adicionar_usuario(int sequencia)
     if (!le_teclado(entrada, sizeof(entrada))) {
         return -1;
     }
-    if (!converte_inteiro(entrada, &id)) {
-        printf("ID inválido. Informe um número inteiro.\n");
+    if (sscanf(entrada, "%d", &id) != 1 || id <= 0) {
+        printf("ID inválido. Informe um número inteiro positivo.\n");
         return 0;
     }
 
@@ -394,17 +363,13 @@ static int opcao_adicionar_usuario(int sequencia)
         printf("Nome inválido. O nome não pode ser vazio.\n");
         return 0;
     }
-
-    /* O nome e limitado ao tamanho aceito pelo servidor; truncar aqui deixa
-     * claro para o operador o que sera efetivamente cadastrado. */
-    strncpy(nome, entrada, TAM_NOME - 1);
-    nome[TAM_NOME - 1] = '\0';
-    if (strlen(entrada) > TAM_NOME - 1) {
-        printf("Aviso: o nome foi reduzido para \"%s\" (limite de %d caracteres).\n",
-               nome, TAM_NOME - 1);
+    if (strlen(entrada) >= TAM_NOME) {
+        printf("Nome muito longo. Use até %d caracteres.\n", TAM_NOME - 1);
+        return 0;
     }
 
-    snprintf(comando, sizeof(comando), "%s %d %d %s", CMD_ADD, sequencia, id, nome);
+    snprintf(comando, sizeof(comando), "%s %d %d %s",
+             CMD_ADD, sequencia, id, entrada);
 
     switch (envia_comando(comando, AGUARDA_ADD)) {
         case 1:  return 0;

@@ -25,7 +25,6 @@ typedef struct {
 } Sessao;
 
 static Sessao          tabela[MAX_SESSOES];
-static int             total_conectadas = 0;
 static int             proximo_slot     = 0;  /* dica de busca circular      */
 static pthread_mutex_t tabela_mutex;
 
@@ -34,7 +33,6 @@ int sessoes_init(void)
     int i;
 
     memset(tabela, 0, sizeof(tabela));
-    total_conectadas = 0;
     proximo_slot     = 0;
 
     if (pthread_mutex_init(&tabela_mutex, NULL) != 0) {
@@ -82,7 +80,6 @@ int sessoes_registra(int sock, const char *ip)
         }
 
         proximo_slot = (encontrado + 1) % MAX_SESSOES;
-        total_conectadas++;
     }
 
     pthread_mutex_unlock(&tabela_mutex);
@@ -100,7 +97,6 @@ void sessoes_remove(int id_sessao)
     if (tabela[id_sessao].em_uso) {
         tabela[id_sessao].em_uso = 0;
         tabela[id_sessao].sock   = -1;
-        total_conectadas--;
     }
 
     pthread_mutex_unlock(&tabela_mutex);
@@ -155,13 +151,3 @@ void sessoes_libera_envio(int id_sessao)
     pthread_mutex_unlock(&tabela[id_sessao].envio_mutex);
 }
 
-int sessoes_conectadas(void)
-{
-    int total;
-
-    pthread_mutex_lock(&tabela_mutex);
-    total = total_conectadas;
-    pthread_mutex_unlock(&tabela_mutex);
-
-    return total;
-}

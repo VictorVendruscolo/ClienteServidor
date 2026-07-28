@@ -60,18 +60,20 @@ alvo proprio para nao alterar o resultado do "make" sem parametros:
 
     make carga
 
-Execucao (com o servidor ja rodando):
+Execucao, com o servidor ja rodando:
 
     ./carga 100
     ./carga 1000
     ./carga 10000
 
-O programa abre a quantidade pedida de conexoes simultaneas, mantem todas
-abertas e aguarda ENTER, permitindo capturar a tela do servidor com todas as
-conexoes visiveis. Para que os clientes tambem se autentiquem e ocupem uma
-sessao no servidor, acrescente a palavra "login":
+Cada cliente gerado conecta e se autentica, ocupando uma sessao no servidor
+exatamente como um ./cliente. O programa abre todas as conexoes pedidas,
+mantem todas abertas e aguarda ENTER, permitindo capturar a tela do servidor
+com todas as conexoes simultaneas visiveis.
 
-    ./carga 10000 login
+IMPORTANTE: reinicie o servidor antes de cada teste de carga. Assim a
+numeracao das conexoes na tela dele comeca em [#1] e vai ate [#N], deixando
+claro que aquele teste abriu exatamente N conexoes.
 
 Antes do teste com 10000 clientes, eleve o limite de descritores de arquivo
 do terminal:

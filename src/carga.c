@@ -5,27 +5,28 @@
  * Aluno: Victor Vendruscolo
  *
  * Compilacao:  make carga
- * Execucao:    ./carga <quantidade> [login]
+ * Execucao:    ./carga <quantidade>
  *
  * Exemplos:    ./carga 100
  *              ./carga 1000
- *              ./carga 10000 login
+ *              ./carga 10000
  *
  * O enunciado exige testar o servidor com 100, 1000 e 10000 clientes, com
- * geracao automatica, e permite expressamente que isso seja feito por um
- * segundo programa cliente que receba a quantidade como parametro. Este e
- * esse programa - ele NAO substitui o ./cliente, que continua sendo iniciado
- * sem parametros.
+ * geracao automatica, e permite criar um segundo programa cliente que receba
+ * a quantidade como parametro. Este e esse programa - ele NAO substitui o
+ * ./cliente, que continua sendo iniciado sem parametros.
  *
  * A estrutura segue o laco de conexoes visto em aula (porta.c), trocando
  * "variar a porta" por "repetir N vezes na mesma porta".
  *
- * Todas as conexoes sao mantidas ABERTAS ao mesmo tempo e o programa aguarda
- * ENTER antes de encerra-las: e isso que permite capturar uma tela em que
- * todas as conexoes simultaneas estejam visiveis, como pede o enunciado.
+ * Cada cliente gerado conecta E se autentica, ocupando uma sessao no
+ * servidor, igual a um ./cliente de verdade. Todas as conexoes sao mantidas
+ * ABERTAS ao mesmo tempo e o programa aguarda ENTER antes de encerra-las:
+ * e isso que permite capturar uma tela com todas as conexoes simultaneas
+ * visiveis, como pede o enunciado.
  *
- * Sem o argumento "login", cada cliente apenas estabelece a conexao TCP.
- * Com "login", cada cliente tambem se autentica e ocupa uma sessao.
+ * IMPORTANTE para os testes: reinicie o servidor antes de cada carga, para
+ * que a numeracao das conexoes na tela dele comece em [#1].
  *
  * Antes do teste com muitos clientes, eleve o limite de descritores do
  * terminal:   ulimit -n 20000
@@ -108,17 +109,18 @@ int main(int argc, char *argv[])
 {
     int *sockets;
     int  quantidade;
-    int  com_login = 0;
-    int  abertos   = 0;
-    int  falhas    = 0;
+    int  abertos = 0;
+    int  falhas  = 0;
     int  i;
     char tecla[8];
 
     /* Escrever num socket que o servidor fechou nao deve derrubar o teste. */
     signal(SIGPIPE, SIG_IGN);
 
-    if (argc < 2 || argc > 3) {
-        fprintf(stderr, "Uso: %s <quantidade> [login]\n", argv[0]);
+    if (argc != 2) {
+        fprintf(stderr, "Uso: %s <quantidade>\n", argv[0]);
+        fprintf(stderr, "Exemplos: %s 100 | %s 1000 | %s 10000\n",
+                argv[0], argv[0], argv[0]);
         return 1;
     }
 
@@ -128,27 +130,20 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (argc == 3) {
-        if (strcmp(argv[2], "login") != 0) {
-            fprintf(stderr, "Erro: o segundo parametro, se usado, deve ser \"login\".\n");
-            return 1;
-        }
-        com_login = 1;
-    }
-
     sockets = (int *) malloc((size_t) quantidade * sizeof(int));
     if (sockets == NULL) {
         fprintf(stderr, "Erro: memoria insuficiente para %d conexoes.\n", quantidade);
         return 1;
     }
 
-    printf("Abrindo %d conexoes em %s:%d%s\n\n", quantidade, SERVER_IP,
-           SERVER_PORTA, com_login ? " (com autenticacao)" : "");
+    printf("Abrindo %d conexoes em %s:%d\n\n", quantidade, SERVER_IP, SERVER_PORTA);
 
     for (i = 0; i < quantidade; i++) {
         int sock = conecta();
 
-        if (sock >= 0 && com_login && !autentica(sock)) {
+        /* Cada cliente gerado tambem se autentica, para ocupar uma sessao no
+         * servidor exatamente como faria um ./cliente. */
+        if (sock >= 0 && !autentica(sock)) {
             close(sock);
             sock = -1;
         }
