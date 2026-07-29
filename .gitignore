@@ -8,12 +8,16 @@
 src/cliente
 src/servidor
 src/carga
+entrega/cliente
+entrega/servidor
+entrega/carga
 
 # Arquivos objeto
 *.o
 
 # Dados gerados durante a execucao do servidor
 src/dados/
+entrega/dados/
 
 # Configuracao local de ferramentas
 .claude/
