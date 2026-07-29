@@ -3,12 +3,12 @@
 
 #include "fila.h"
 
-// static: so este arquivo alcanca o vetor, entao todo acesso passa pelas
-// funcoes abaixo, que travam o mutex.
+// static: acesso so pelas funcoes com mutex
 static Usuario         fila[MAX_USUARIOS_FILA];
 static int             quantidade = 0;
 static pthread_mutex_t fila_mutex;
 
+// inicializa fila e mutex
 int fila_init(void)
 {
     quantidade = 0;
@@ -20,7 +20,7 @@ int fila_init(void)
     return 0;
 }
 
-// Insere no fim da fila. Devolve o indice, ou FILA_CHEIA.
+// insere no fim, devolve o indice
 int fila_adiciona(int id, const char *nome)
 {
     int indice;
@@ -42,6 +42,7 @@ int fila_adiciona(int id, const char *nome)
     return indice;
 }
 
+// tamanho atual
 int fila_tamanho(void)
 {
     int total;
@@ -53,8 +54,7 @@ int fila_tamanho(void)
     return total;
 }
 
-// Copia um trecho da fila. Copiar sob o mutex deixa quem chamou com um
-// retrato consistente, sem precisar prender a fila para enviar.
+// copia trecho sob mutex
 int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max)
 {
     int copiados = 0;

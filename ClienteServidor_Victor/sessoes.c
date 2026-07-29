@@ -5,17 +5,19 @@
 #include "sessoes.h"
 #include "protocolo.h"
 
+// entrada da tabela
 typedef struct {
     int             em_uso;
     int             sock;
     char            ip[INET_ADDRSTRLEN];
-    pthread_mutex_t envio_mutex;             // impede escritas misturadas
+    pthread_mutex_t envio_mutex;             // evita escritas misturadas
 } Sessao;
 
 static Sessao          tabela[MAX_SESSOES];
-static int             proximo_slot     = 0;  // por onde comecar a procurar
+static int             proximo_slot     = 0;
 static pthread_mutex_t tabela_mutex;
 
+// inicializa a tabela e os mutexes
 int sessoes_init(void)
 {
     int i;
@@ -27,8 +29,6 @@ int sessoes_init(void)
         return -1;
     }
 
-    // os mutexes de envio sao criados uma vez e reaproveitados por cada
-    // sessao que ocupar aquela posicao
     for (i = 0; i < MAX_SESSOES; i++) {
         if (pthread_mutex_init(&tabela[i].envio_mutex, NULL) != 0) {
             return -1;
@@ -37,6 +37,7 @@ int sessoes_init(void)
     return 0;
 }
 
+// registra cliente autenticado
 int sessoes_registra(int sock, const char *ip)
 {
     int encontrado = SESSAO_INVALIDA;
@@ -45,8 +46,7 @@ int sessoes_registra(int sock, const char *ip)
 
     pthread_mutex_lock(&tabela_mutex);
 
-    // busca circular: comeca da ultima posicao usada, em vez de varrer a
-    // tabela inteira a cada nova conexao
+    // busca circular a partir da ultima posicao usada
     i = proximo_slot;
     for (tentativas = 0; tentativas < MAX_SESSOES; tentativas++) {
         if (!tabela[i].em_uso) {
@@ -74,6 +74,7 @@ int sessoes_registra(int sock, const char *ip)
     return encontrado;
 }
 
+// remove da tabela
 void sessoes_remove(int id_sessao)
 {
     if (id_sessao < 0 || id_sessao >= MAX_SESSOES) {
@@ -90,6 +91,7 @@ void sessoes_remove(int id_sessao)
     pthread_mutex_unlock(&tabela_mutex);
 }
 
+// envia a todos, menos a origem
 void sessoes_broadcast(int id_sessao_origem, const char *linha)
 {
     int i;
@@ -98,17 +100,13 @@ void sessoes_broadcast(int id_sessao_origem, const char *linha)
         return;
     }
 
-    // a tabela fica travada durante todo o laco: e isso que impede uma
-    // sessao de ser removida (e o socket fechado) no meio de um envio
-    pthread_mutex_lock(&tabela_mutex);
+    pthread_mutex_lock(&tabela_mutex);      // impede remocao durante o envio
 
     for (i = 0; i < MAX_SESSOES; i++) {
         if (!tabela[i].em_uso || i == id_sessao_origem) {
             continue;
         }
 
-        // trava o envio daquele cliente para esta linha nao entrar no meio
-        // de uma resposta que a thread dele esteja mandando
         pthread_mutex_lock(&tabela[i].envio_mutex);
         (void) protocolo_envia_linha(tabela[i].sock, linha);
         pthread_mutex_unlock(&tabela[i].envio_mutex);
@@ -117,8 +115,7 @@ void sessoes_broadcast(int id_sessao_origem, const char *linha)
     pthread_mutex_unlock(&tabela_mutex);
 }
 
-// Nao trava a tabela: quem chama e a thread dona da sessao, e so ela remove
-// essa sessao, entao a posicao existe.
+// trava o envio, pela thread da sessao
 void sessoes_trava_envio(int id_sessao)
 {
     if (id_sessao < 0 || id_sessao >= MAX_SESSOES) {
@@ -128,6 +125,7 @@ void sessoes_trava_envio(int id_sessao)
     pthread_mutex_lock(&tabela[id_sessao].envio_mutex);
 }
 
+// libera o envio
 void sessoes_libera_envio(int id_sessao)
 {
     if (id_sessao < 0 || id_sessao >= MAX_SESSOES) {

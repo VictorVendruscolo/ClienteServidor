@@ -13,17 +13,15 @@
 #include "comum.h"
 #include "protocolo.h"
 
-// Duas threads: a receptora le o socket e a principal le o teclado. Com um
-// fluxo so, o programa ficaria parado no teclado e o broadcast so apareceria
-// depois - o enunciado pede atualizacao em tempo real.
+// duas threads: socket e teclado
 
-// Qual comando espera resposta
+// operacoes
 #define AGUARDA_NADA      0
 #define AGUARDA_ADD       1
 #define AGUARDA_LIST      2
 #define AGUARDA_HEARTBEAT 3
 
-// Ligacao entre a thread receptora e a principal
+// ligacao entre as duas threads
 typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t  condicao;
@@ -31,15 +29,13 @@ typedef struct {
     int aguardando;
     int resposta_completa;
     int conexao_ativa;
-    int dentro_do_bloco;     // entre o cabecalho e o rodape da fila
+    int dentro_do_bloco;
 } Canal;
 
 static Canal  canal;
 static int    socket_servidor = -1;
 
-// ---------- thread receptora ----------
-
-// Chamar com o mutex do canal ja travado.
+// sinaliza resposta pronta
 static void marca_resposta_completa(void)
 {
     canal.resposta_completa = 1;
@@ -47,7 +43,7 @@ static void marca_resposta_completa(void)
     pthread_cond_signal(&canal.condicao);
 }
 
-// Imprime a linha conforme o comando que a pediu, no formato das telas.
+// impressao da linha de acordo com comando
 static void imprime_resposta(int comando, const char *linha, int primeira_linha)
 {
     if (strncmp(linha, RESP_ADD_OK, strlen(RESP_ADD_OK)) == 0) {
@@ -55,7 +51,7 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
         int         id    = 0;
         int         deslocamento = 0;
 
-        // "ADD_OK <id> <nome>" vira "Usuário <nome> adicionado."
+        // converte operador
         if (sscanf(resto, "%d %n", &id, &deslocamento) == 1 && deslocamento > 0) {
             printf("Usuário %s adicionado.\n", resto + deslocamento);
         } else {
@@ -76,7 +72,7 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
 
     if (strcmp(linha, FILA_CABECALHO) == 0) {
         if (comando == AGUARDA_HEARTBEAT && primeira_linha) {
-            printf("Heartbeat:\n");     // anuncia antes do bloco
+            printf("Heartbeat:\n");
         } else {
             printf("\n");
         }
@@ -89,11 +85,10 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
         return;
     }
 
-    printf("%s\n", linha);              // linha "id - nome" do bloco
+    printf("%s\n", linha);
 }
 
-// Unica funcao do cliente que chama recv(): assim duas threads nunca
-// disputam os mesmos bytes.
+// recv sem disputa de bytes
 static void *thread_receptora(void *argumento)
 {
     LeitorLinha leitor;
@@ -113,7 +108,7 @@ static void *thread_receptora(void *argumento)
             break;
         }
 
-        // broadcast: chega sem o cliente pedir, e sem acento; acentua aqui
+        // broadcast: chega sem pedir, acentua na exibicao
         if (strncmp(linha, BROADCAST_NOVO_USUARIO,
                     strlen(BROADCAST_NOVO_USUARIO)) == 0) {
             printf("[Broadcast] Novo usuário: %s\n",
@@ -129,8 +124,7 @@ static void *thread_receptora(void *argumento)
 
         pthread_mutex_lock(&canal.mutex);
 
-        // so mostra a resposta se algum comando estiver esperando por ela;
-        // senao e copia atrasada de um comando reenviado e abandonado
+        // sem comando esperando = copia atrasada, ignora
         if (!canal.dentro_do_bloco) {
             if (strcmp(linha, FILA_CABECALHO) == 0) {
                 canal.dentro_do_bloco = 1;
@@ -160,11 +154,7 @@ static void *thread_receptora(void *argumento)
     return NULL;
 }
 
-// ---------- envio com reenvio ----------
-
-// Manda o comando e espera a resposta. Sem resposta no tempo, reenvia o
-// mesmo texto (logo, o mesmo numero de sequencia), ate MAX_TENTATIVAS.
-// Devolve 1 se veio resposta, 0 se nao veio, -1 se a conexao caiu.
+// envio com reenvio: mesmo texto, mesma sequencia
 static int envia_comando(const char *comando_texto, int tipo)
 {
     int envios = 0;
@@ -193,9 +183,7 @@ static int envia_comando(const char *comando_texto, int tipo)
         {
             struct timespec limite;
 
-            // pthread_cond_timedwait quer um instante absoluto, da mesma
-            // origem que o time() usa
-            limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;
+            limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;   // instante absoluto
             limite.tv_nsec = 0;
 
             pthread_mutex_lock(&canal.mutex);
@@ -211,9 +199,8 @@ static int envia_comando(const char *comando_texto, int tipo)
         }
     }
 
-    // para de esperar: copia atrasada que chegar sera ignorada
     pthread_mutex_lock(&canal.mutex);
-    canal.aguardando = AGUARDA_NADA;
+    canal.aguardando = AGUARDA_NADA;        // copia atrasada sera ignorada
     pthread_mutex_unlock(&canal.mutex);
 
     if (caiu) {
@@ -222,18 +209,17 @@ static int envia_comando(const char *comando_texto, int tipo)
     return obtida ? 1 : 0;
 }
 
-// ---------- teclado ----------
-
-// Devolve 1 se leu, 0 se a entrada acabou (Ctrl+D).
+// leitura do teclado
 static int le_teclado(char *destino, size_t tam)
 {
     if (fgets(destino, (int) tam, stdin) == NULL) {
-        return 0;
+        return 0;                           // Ctrl+D
     }
     protocolo_limpa_bordas(destino);
     return 1;
 }
 
+// valida o nome
 static int nome_valido(const char *nome)
 {
     int i;
@@ -244,15 +230,13 @@ static int nome_valido(const char *nome)
     for (i = 0; nome[i] != '\0'; i++) {
         unsigned char c = (unsigned char) nome[i];
         if (c < 32 || c == 127) {
-            return 0;   // caractere de controle quebraria a divisao por linha
+            return 0;                       // controle quebraria a linha
         }
     }
     return 1;
 }
 
-// ---------- opcoes do menu ----------
-
-// Opcao 1. Devolve 0 para seguir no menu e -1 se a conexao caiu.
+// opcao 1: adicionar usuario
 static int opcao_adicionar_usuario(int sequencia)
 {
     char entrada[TAM_LINHA];
@@ -284,7 +268,7 @@ static int opcao_adicionar_usuario(int sequencia)
         return 0;
     }
 
-    strcpy(nome, entrada);      // tamanho ja conferido acima
+    strcpy(nome, entrada);                  // tamanho ja conferido
 
     snprintf(comando, sizeof(comando), "%s %d %d %s",
              CMD_ADD, sequencia, id, nome);
@@ -296,7 +280,7 @@ static int opcao_adicionar_usuario(int sequencia)
     }
 }
 
-// Opcao 2
+// opcao 2: ver fila
 static int opcao_ver_fila(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -310,7 +294,7 @@ static int opcao_ver_fila(int sequencia)
     }
 }
 
-// Opcao 3
+// opcao 3: heartbeat
 static int opcao_heartbeat(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -324,6 +308,7 @@ static int opcao_heartbeat(int sequencia)
     }
 }
 
+// menu
 static void mostra_menu(void)
 {
     printf("\n");
@@ -334,8 +319,7 @@ static void mostra_menu(void)
     fflush(stdout);
 }
 
-// ---------- conexao ----------
-
+// conexao TCP
 static int conecta_ao_servidor(void)
 {
     struct sockaddr_in endereco;
@@ -350,7 +334,7 @@ static int conecta_ao_servidor(void)
     endereco.sin_family = AF_INET;
     endereco.sin_port   = htons(SERVER_PORTA);
 
-    // inet_pton: texto para binario; distingue erro de endereco valido
+    // inet_pton: texto para binario
     if (inet_pton(AF_INET, SERVER_IP, &endereco.sin_addr) <= 0) {
         fprintf(stderr, "Endereço IP inválido em SERVER_IP: %s\n", SERVER_IP);
         close(socket_servidor);
@@ -370,8 +354,7 @@ static int conecta_ao_servidor(void)
     return 0;
 }
 
-// Login automatico com a credencial do codigo. Acontece antes de a thread
-// receptora existir, entao e sequencial: manda uma, le uma.
+// login automatico
 static int autentica(void)
 {
     LeitorLinha leitor;
@@ -406,10 +389,10 @@ static int autentica(void)
 int main(void)
 {
     pthread_t receptora;
-    int       sequencia = 0;   // numera os comandos desta conexao
+    int       sequencia = 0;    // numera os comandos desta conexao
     int       encerrar  = 0;
 
-    signal(SIGPIPE, SIG_IGN);   // sem isso, escrever em socket fechado mata o processo
+    signal(SIGPIPE, SIG_IGN);   // escrever em socket fechado mataria o processo
 
     if (conecta_ao_servidor() != 0) {
         return 1;
@@ -421,7 +404,7 @@ int main(void)
         return 1;
     }
 
-    // prepara a ligacao entre as duas threads
+    // canal entre as threads
     memset(&canal, 0, sizeof(canal));
     canal.conexao_ativa = 1;
     canal.aguardando    = AGUARDA_NADA;
@@ -434,7 +417,7 @@ int main(void)
         return 1;
     }
 
-    // laco do menu
+    // menu
     while (!encerrar) {
         char entrada[TAM_LINHA];
         int  resultado = 0;
@@ -452,7 +435,7 @@ int main(void)
         mostra_menu();
 
         if (!le_teclado(entrada, sizeof(entrada))) {
-            break;              // Ctrl+D encerra como se fosse "Sair"
+            break;
         }
 
         if (strcmp(entrada, "1") == 0) {
@@ -481,7 +464,7 @@ int main(void)
     // encerramento
     (void) protocolo_envia_linha(socket_servidor, CMD_SAIR);
 
-    shutdown(socket_servidor, SHUT_RDWR);   // faz a receptora sair do recv()
+    shutdown(socket_servidor, SHUT_RDWR);   // faz a receptora sair do recv
     pthread_join(receptora, NULL);
     close(socket_servidor);
 

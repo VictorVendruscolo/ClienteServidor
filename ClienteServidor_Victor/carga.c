@@ -11,12 +11,12 @@
 #include "comum.h"
 #include "protocolo.h"
 
-// Gerador de clientes para o teste de carga: ./carga <quantidade>
-// Nao substitui o ./cliente, que continua sem parametros.
-// Antes de muitos clientes:  ulimit -n 20000
+// teste de carga: ./carga <quantidade>
+// antes de muitos clientes: ulimit -n 20000
 
-#define INTERVALO_RELATORIO 100     // de quantas em quantas mostra o progresso
+#define INTERVALO_RELATORIO 100
 
+// conexao
 static int conecta(void)
 {
     struct sockaddr_in endereco;
@@ -44,6 +44,7 @@ static int conecta(void)
     return sock;
 }
 
+// login
 static int autentica(int sock)
 {
     LeitorLinha leitor;
@@ -97,10 +98,10 @@ int main(int argc, char *argv[])
 
     printf("Abrindo %d conexoes em %s:%d\n\n", quantidade, SERVER_IP, SERVER_PORTA);
 
+    // abre e autentica cada cliente
     for (i = 0; i < quantidade; i++) {
         int sock = conecta();
 
-        // cada cliente gerado tambem se autentica, ocupando uma sessao
         if (sock >= 0 && !autentica(sock)) {
             close(sock);
             sock = -1;
@@ -113,7 +114,7 @@ int main(int argc, char *argv[])
         } else {
             falhas++;
             if (falhas == 1) {
-                // quase sempre e limite de descritores ou servidor fora do ar
+                // em geral: descritores ou servidor fora
                 printf("Primeira falha na conexao %d: %s\n", i + 1, strerror(errno));
             }
         }
@@ -124,15 +125,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    // manter todas abertas e o que faz o servidor sustentar N clientes ao
-    // mesmo tempo, em vez de N conexoes em sequencia
+    // mantem abertas: N clientes simultaneos
     printf("\nResultado: %d conexoes abertas, %d falhas.\n", abertos, falhas);
     printf("As %d conexoes permanecem ativas simultaneamente.\n", abertos);
     printf("Pressione ENTER para encerra-las...");
     fflush(stdout);
 
     if (fgets(tecla, sizeof(tecla), stdin) == NULL) {
-        // entrada encerrada: fecha assim mesmo
+        // entrada encerrada, fecha assim mesmo
     }
 
     for (i = 0; i < quantidade; i++) {

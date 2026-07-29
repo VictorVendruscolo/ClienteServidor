@@ -15,51 +15,43 @@
 #include "sessoes.h"
 #include "persistencia.h"
 
-// Tecnica de multiplos clientes: threads. A thread principal so aceita
-// conexoes e entrega cada uma a uma thread nova; nunca atende um cliente.
+// multiplos clientes por threads
 
-#define TAM_PILHA_THREAD (256 * 1024)   // 256 KB: com os 8 MB padrao, 10000 threads nao caberiam
-#define LOTE_ENVIO 32                   // usuarios copiados por vez da fila
+#define TAM_PILHA_THREAD (256 * 1024)   // 8 MB padrao nao cabe em 10000 threads
+#define LOTE_ENVIO 32
 #define TAM_RESPOSTA_ADD 256
 
-// Resultado da verificacao do numero de sequencia
+// classificacao da sequencia
 #define SEQ_NOVA     0
 #define SEQ_REPETIDA 1
 #define SEQ_INVALIDA 2
 
-// Dados que a thread principal passa para a thread de atendimento
+// dados passados para a thread de atendimento
 typedef struct {
     int           sock;
     char          ip[INET_ADDRSTRLEN];
     int           porta;
-    unsigned long numero;                  // numero da conexao
+    unsigned long numero;
 } DadosConexao;
 
-// Estado de uma conexao, do login ate a saida. Fica na pilha da thread:
-// cada cliente tem o seu, ninguem compartilha, nao precisa de protecao.
+// estado da conexao, na pilha da thread
 typedef struct {
     int  sock;
     int  id_sessao;
 
     int  seq_ultimo;
 
-    // resposta do ultimo ADD: e o unico comando que muda a fila, entao o
-    // unico que nao pode ser executado duas vezes
-    char ultima_resposta_add[TAM_RESPOSTA_ADD];
+    char ultima_resposta_add[TAM_RESPOSTA_ADD];   // ADD e o unico que muda a fila
     int  resposta_add_valida;
 
-    // trecho devolvido no ultimo HEARTBEAT; guardar os dois limites permite
-    // repetir a mesma resposta se o comando for reenviado
-    int  indice_visto;
+    int  indice_visto;                            // limites do ultimo heartbeat
     int  indice_visto_antes;
 } EstadoConexao;
 
 static unsigned long   total_conexoes  = 0;
 static pthread_mutex_t mutex_contador  = PTHREAD_MUTEX_INITIALIZER;
 
-// ---------- envio ----------
-
-// Envia uma linha sem deixar um broadcast entrar no meio.
+// envio de linha unica
 static int envia_resposta(EstadoConexao *estado, const char *linha)
 {
     int resultado;
@@ -71,15 +63,14 @@ static int envia_resposta(EstadoConexao *estado, const char *linha)
     return resultado;
 }
 
-// Envia o bloco da fila referente a [inicio, fim). A trava de envio segura o
-// bloco todo; a fila e travada so em lotes curtos.
+// envio do bloco da fila
 static int envia_bloco_fila(EstadoConexao *estado, int inicio, int fim)
 {
     Usuario lote[LOTE_ENVIO];
     int     posicao = inicio;
     int     erro    = 0;
 
-    sessoes_trava_envio(estado->id_sessao);
+    sessoes_trava_envio(estado->id_sessao);     // bloco sai inteiro
 
     if (protocolo_envia_linha(estado->sock, FILA_CABECALHO) != 0) {
         erro = 1;
@@ -120,6 +111,7 @@ static int envia_bloco_fila(EstadoConexao *estado, int inicio, int fim)
     return erro ? -1 : 0;
 }
 
+// guarda a resposta do ADD
 static void guarda_resposta_add(EstadoConexao *estado, const char *resposta)
 {
     if (strlen(resposta) < TAM_RESPOSTA_ADD) {
@@ -130,11 +122,7 @@ static void guarda_resposta_add(EstadoConexao *estado, const char *resposta)
     }
 }
 
-// ---------- retransmissao ----------
-
-// O cliente repete o MESMO numero ao reenviar um comando sem resposta.
-// Comparando com o ultimo processado, sabemos se executamos ou so repetimos
-// a resposta - e isso que impede o mesmo usuario de entrar duas vezes.
+// classifica a sequencia: igual = reenvio
 static int verifica_sequencia(EstadoConexao *estado, int seq)
 {
     if (seq <= 0) {
@@ -144,13 +132,12 @@ static int verifica_sequencia(EstadoConexao *estado, int seq)
         return SEQ_REPETIDA;
     }
     if (seq < estado->seq_ultimo) {
-        return SEQ_INVALIDA;                 // fora de ordem
+        return SEQ_INVALIDA;
     }
     return SEQ_NOVA;
 }
 
-// ---------- validacao ----------
-
+// valida o nome
 static int nome_valido(const char *nome)
 {
     int i;
@@ -159,18 +146,16 @@ static int nome_valido(const char *nome)
         return 0;
     }
     if (strlen(nome) >= TAM_NOME) {
-        return 0;      // recusa em vez de cortar: o cliente nao pode receber nome diferente
+        return 0;           // recusa em vez de cortar
     }
     for (i = 0; nome[i] != '\0'; i++) {
         unsigned char c = (unsigned char) nome[i];
         if (c < 32 || c == 127) {
-            return 0;  // caractere de controle quebraria a divisao por linha
+            return 0;       // controle quebraria a divisao por linha
         }
     }
     return 1;
 }
-
-// ---------- comandos ----------
 
 // ADD <seq> <id> <nome>
 static int trata_add(EstadoConexao *estado, const char *linha)
@@ -184,8 +169,7 @@ static int trata_add(EstadoConexao *estado, const char *linha)
     int         indice;
     int         situacao;
 
-    // "%*s" pula o comando e "%n" marca onde parou: o resto da linha e o
-    // nome, que pode ter espacos
+    // "%*s" pula o comando, "%n" marca onde o nome comeca
     if (sscanf(linha, "%*s %d %d %n", &seq, &id, &deslocamento) < 2) {
         return envia_resposta(estado, RESP_ERRO " Formato esperado: ADD <seq> <id> <nome>");
     }
@@ -206,7 +190,7 @@ static int trata_add(EstadoConexao *estado, const char *linha)
     }
     if (situacao == SEQ_REPETIDA) {
         if (estado->resposta_add_valida) {
-            return envia_resposta(estado, estado->ultima_resposta_add);   // sem inserir de novo
+            return envia_resposta(estado, estado->ultima_resposta_add);   // sem reinserir
         }
         return envia_resposta(estado, RESP_ERRO " Comando repetido sem resposta armazenada");
     }
@@ -221,15 +205,14 @@ static int trata_add(EstadoConexao *estado, const char *linha)
         return envia_resposta(estado, resposta);
     }
 
-    // quem cadastrou ja "viu" o proprio registro, senao o HEARTBEAT
-    // devolveria a ele o usuario que ele mesmo inseriu
+    // autor ja "viu" o proprio registro
     estado->indice_visto_antes = estado->indice_visto;
     estado->indice_visto       = indice + 1;
 
     persistencia_historico_add(id, nome);
     persistencia_salva_fila();
 
-    // avisa os outros clientes, ja fora de qualquer trava da fila
+    // avisa os outros
     snprintf(aviso, sizeof(aviso), "%s%s", BROADCAST_NOVO_USUARIO, nome);
     sessoes_broadcast(estado->id_sessao, aviso);
 
@@ -239,7 +222,7 @@ static int trata_add(EstadoConexao *estado, const char *linha)
     return envia_resposta(estado, resposta);
 }
 
-// LIST <seq> - devolve a fila inteira. So le, entao repetir e refazer.
+// LIST <seq>
 static int trata_list(EstadoConexao *estado, const char *linha)
 {
     int seq = 0;
@@ -255,15 +238,12 @@ static int trata_list(EstadoConexao *estado, const char *linha)
     }
 
     estado->seq_ultimo = seq;
-    estado->resposta_add_valida = 0;    // a resposta guardada vale so para o ultimo comando
+    estado->resposta_add_valida = 0;        // vale so para o ultimo comando
 
     return envia_bloco_fila(estado, 0, fila_tamanho());
 }
 
-// HEARTBEAT <seq> - devolve os usuarios cadastrados por OUTROS clientes
-// desde a ultima verificacao; se nao houver, ALIVE.
-// Comando novo avanca os marcadores; comando repetido mantem os mesmos e
-// produz a mesma resposta - inclusive o ALIVE, que sai do trecho vazio.
+// HEARTBEAT <seq>: novidade ou ALIVE
 static int trata_heartbeat(EstadoConexao *estado, const char *linha)
 {
     int seq = 0;
@@ -280,7 +260,7 @@ static int trata_heartbeat(EstadoConexao *estado, const char *linha)
         return envia_resposta(estado, RESP_ERRO " Numero de sequencia invalido");
     }
 
-    if (situacao == SEQ_NOVA) {
+    if (situacao == SEQ_NOVA) {             // repetido mantem os limites
         estado->indice_visto_antes  = estado->indice_visto;
         estado->indice_visto        = fila_tamanho();
         estado->seq_ultimo          = seq;
@@ -291,19 +271,18 @@ static int trata_heartbeat(EstadoConexao *estado, const char *linha)
     fim    = estado->indice_visto;
 
     if (fim <= inicio) {
-        return envia_resposta(estado, RESP_ALIVE);      // nada novo
+        return envia_resposta(estado, RESP_ALIVE);      // trecho vazio
     }
 
     return envia_bloco_fila(estado, inicio, fim);
 }
 
-// ---------- autenticacao ----------
-
+// resultados do login
 #define AUTENTICADO        1
 #define CREDENCIAL_NEGADA  0
-#define SEM_TENTATIVA    (-1)   // conexao acabou antes de mandar qualquer coisa
+#define SEM_TENTATIVA    (-1)
 
-// Le a primeira mensagem e confere a credencial: LOGIN <usuario> <senha>
+// login: LOGIN <usuario> <senha>
 static int autentica(int sock, LeitorLinha *leitor)
 {
     char linha[TAM_LINHA];
@@ -330,9 +309,7 @@ static int autentica(int sock, LeitorLinha *leitor)
     return AUTENTICADO;
 }
 
-// ---------- thread de atendimento ----------
-
-// Roda uma copia desta funcao por cliente conectado.
+// atendimento: uma copia por cliente conectado
 static void *atende_cliente(void *argumento)
 {
     DadosConexao *dados = (DadosConexao *) argumento;
@@ -348,9 +325,9 @@ static void *atende_cliente(void *argumento)
 
     strncpy(ip, dados->ip, sizeof(ip) - 1);
     ip[sizeof(ip) - 1] = '\0';
-    free(dados);                        // ja copiei o que precisava
+    free(dados);
 
-    // numero e origem deixam cada conexao identificavel com muitos clientes
+    // numero e origem identificam a conexao
     persistencia_log_servidor("Novo cliente conectado. [#%lu] %s:%d",
                               numero, ip, porta);
 
@@ -360,7 +337,7 @@ static void *atende_cliente(void *argumento)
     estado.sock      = sock;
     estado.id_sessao = SESSAO_INVALIDA;
 
-    // autenticacao
+    // login
     autenticado = autentica(sock, &leitor);
     if (autenticado != AUTENTICADO) {
         persistencia_log_servidor("Cliente desconectado. [#%lu] %s:%d (%s)",
@@ -372,7 +349,7 @@ static void *atende_cliente(void *argumento)
         return NULL;
     }
 
-    // registro da sessao: e o que habilita receber broadcast
+    // sessao: habilita o broadcast
     estado.id_sessao = sessoes_registra(sock, ip);
     if (estado.id_sessao == SESSAO_INVALIDA) {
         (void) protocolo_envia_linha(sock, RESP_ERRO " Servidor com lotacao maxima de sessoes");
@@ -384,21 +361,20 @@ static void *atende_cliente(void *argumento)
 
     persistencia_log_sessao("LOGIN", ip);
 
-    // o que ja estava na fila conta como visto: o heartbeat so reporta o
-    // que chegar daqui pra frente
+    // o que ja estava na fila conta como visto
     estado.indice_visto       = fila_tamanho();
     estado.indice_visto_antes = estado.indice_visto;
 
-    // laco de comandos
+    // comandos
     for (;;) {
         int leitura = protocolo_le_linha(&leitor, linha, sizeof(linha));
 
         if (leitura != LINHA_OK) {
-            break;                      // cliente fechou ou linha invalida
+            break;                          // fechou ou linha invalida
         }
 
         if (sscanf(linha, "%31s", comando) != 1) {
-            continue;                   // linha em branco
+            continue;                       // linha em branco
         }
 
         if (strcmp(comando, CMD_ADD) == 0) {
@@ -438,7 +414,7 @@ int main(void)
     int                socket_escuta;
     int                valor = 1;
 
-    signal(SIGPIPE, SIG_IGN);   // sem isso, escrever em socket fechado mata o processo
+    signal(SIGPIPE, SIG_IGN);   // escrever em socket fechado mataria o processo
 
     if (persistencia_init() != 0) {
         return 1;
@@ -459,7 +435,7 @@ int main(void)
         return 1;
     }
 
-    // SO_REUSEADDR: reinicia o servidor na hora, sem esperar o TIME_WAIT
+    // SO_REUSEADDR: reinicia sem esperar o TIME_WAIT
     if (setsockopt(socket_escuta, SOL_SOCKET, SO_REUSEADDR,
                    &valor, sizeof(valor)) < 0) {
         perror("Erro no setsockopt");
@@ -470,7 +446,7 @@ int main(void)
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family      = AF_INET;
     endereco_servidor.sin_addr.s_addr = INADDR_ANY;      // qualquer interface
-    endereco_servidor.sin_port        = htons(SERVER_PORTA);
+    endereco_servidor.sin_port        = htons(SERVER_PORTA);   // ordem de bytes da rede
 
     if (bind(socket_escuta, (struct sockaddr *) &endereco_servidor,
              sizeof(endereco_servidor)) < 0) {
@@ -479,24 +455,24 @@ int main(void)
         return 1;
     }
 
-    if (listen(socket_escuta, BACKLOG) < 0) {
+    if (listen(socket_escuta, BACKLOG) < 0) {   // BACKLOG: fila de pendentes
         perror("Erro no listen");
         close(socket_escuta);
         return 1;
     }
 
-    // atributos das threads de atendimento
+    // atributos das threads
     if (pthread_attr_init(&atributos) != 0) {
         perror("Erro ao inicializar os atributos de thread");
         close(socket_escuta);
         return 1;
     }
     pthread_attr_setstacksize(&atributos, TAM_PILHA_THREAD);
-    pthread_attr_setdetachstate(&atributos, PTHREAD_CREATE_DETACHED);  // evita thread zumbi
+    pthread_attr_setdetachstate(&atributos, PTHREAD_CREATE_DETACHED);   // evita thread zumbi
 
     persistencia_log_servidor("Servidor iniciado na porta %d", SERVER_PORTA);
 
-    // laco de aceitacao
+    // aceitacao de conexoes
     for (;;) {
         struct sockaddr_in endereco_cliente;
         socklen_t          tamanho_endereco = sizeof(endereco_cliente);
@@ -504,12 +480,12 @@ int main(void)
         pthread_t          identificador_thread;
         int                novo_socket;
 
-        novo_socket = accept(socket_escuta,
+        novo_socket = accept(socket_escuta,     // devolve socket novo por cliente
                              (struct sockaddr *) &endereco_cliente,
                              &tamanho_endereco);
 
         if (novo_socket < 0) {
-            perror("Erro no accept");   // falhar em aceitar nao derruba o servidor
+            perror("Erro no accept");
             continue;
         }
 
@@ -539,6 +515,6 @@ int main(void)
             continue;
         }
 
-        sched_yield();      // da a vez para a thread recem-criada
+        sched_yield();      // da a vez para a thread nova
     }
 }
