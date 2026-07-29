@@ -1,108 +1,75 @@
 CAPTURAS DE TELA DA DOCUMENTACAO
 ================================
 
-Coloque as imagens NESTA PASTA, com os nomes EXATOS da lista abaixo.
-Formato: .png (o .jpg tambem funciona, mas troque a extensao no .tex).
-
-Enquanto um arquivo nao existir, o documentacao.tex continua compilando
-normalmente e mostra uma moldura escrita [CAPTURA PENDENTE] no lugar dele.
-Assim voce ve o PDF pronto antes de ter todas as fotos.
+Todas as capturas ja estao nesta pasta. Este arquivo so registra quais
+delas o documentacao.tex usa e quais ficaram de reserva.
 
 
-ITEM 7 - FUNCIONAMENTO CORRETO (9 capturas)
--------------------------------------------
+USADAS NO DOCUMENTO (10 capturas, varias em pares lado a lado)
+--------------------------------------------------------------
 
-01-servidor-iniciado.png
-    Terminal do servidor logo apos ./servidor. Precisa mostrar a linha
-    "Servidor iniciado na porta 8080" e, em seguida, os dois
-    "Novo cliente conectado." dos clientes A e B.
+Item 7 - funcionamento correto:
 
-02-cliente-a-login-menu.png
-    Cliente A recem-conectado: "Conectado ao servidor.",
-    "Servidor: LOGIN_OK" e o menu 1/2/3/0.
+    01-servidor-iniciado.png        sozinha
+    03-cliente-a-cadastro.png       sozinha        <-- ver RESSALVA abaixo
+    04-cliente-b-broadcast.png  \
+                                 >  par lado a lado
+    05-ver-fila.png             /
+    06-heartbeat-novidade.png   \
+                                 >  par lado a lado
+    07-heartbeat-alive.png      /
+    08-caso-de-erro.png             sozinha
+    09-persistencia.png             sozinha
 
-03-cliente-a-cadastro.png
-    Cliente A cadastrando 10/Abel e 30/Breno, com as confirmacoes
-    "Usuario Abel adicionado." e "Usuario Breno adicionado.".
+Item 6 - teste de carga:
 
-04-cliente-b-broadcast.png      <-- A MAIS IMPORTANTE
-    Tela do cliente B mostrando "[Broadcast] Novo usuario: Abel" e
-    "...: Breno" surgindo SEM ele ter pedido nada. Esta e a prova
-    visual do tempo real. Nao deixe de capturar.
-
-05-ver-fila.png
-    Opcao 2 num dos clientes, com os quatro usuarios entre
-    "===== FILA =====" e "================".
-
-06-heartbeat-novidade.png
-    Opcao 3 no cliente A, devolvendo SO os usuarios cadastrados pelo B
-    (20 - Carlos e 40 - Dario).
-
-07-heartbeat-alive.png
-    Opcao 3 repetida, sem novidade desde a ultima checagem:
-    "Heartbeat: ALIVE".
-
-08-caso-de-erro.png
-    Um caso de erro tratado. Sugestao: identificador -7 ou 0, que
-    devolve "ERRO O identificador deve ser um numero positivo".
-    Mostre que o menu volta e a conexao continua aberta.
-
-09-persistencia.png
-    Saida de "cat dados/fila.txt" e "cat dados/historico.txt".
-    Pode ser uma captura so, com os dois comandos na mesma tela.
+    carga-inicio-100.png        \
+                                 >  par lado a lado
+    carga-fim-100.png           /
+    carga-inicio-1000.png       \
+                                 >  par lado a lado
+    carga-fim-1000.png          /
+    carga-fim-10000.png         \
+                                 >  par lado a lado
+    carga-cliente-fim-10000.png /
+    carga-cliente-1000.png          sozinha
 
 
-ITEM 6 - TESTE DE CARGA (3 capturas)
-------------------------------------
+DE RESERVA, NAO USADAS
+----------------------
 
-carga-100.png
-carga-1000.png
-carga-10000.png
-    Tela do SERVIDOR durante cada teste, com as conexoes numeradas.
-    Precisa dar para identificar as conexoes: enquadre de forma que se
-    veja o [#1] no comeco e o [#N] no fim (role o terminal se preciso,
-    ou tire duas capturas e junte).
+    02-cliente-a-login-menu.png     o conteudo dela ja aparece dentro da 03
+    carga-cliente-100.png           equivalente a carga-cliente-1000
+    carga-cliente-10000.png         so o inicio; o fecho esta na -fim-
 
-
-ROTEIRO PARA GERAR TUDO
------------------------
-
-ANTES DE COMECAR:
-    1. Troque SERVER_IP em comum.h pelo IP real da maquina do servidor
-       (descubra com: hostname -I). Se for tudo na mesma maquina,
-       127.0.0.1 serve.
-    2. make
-
-FUNCIONAMENTO (capturas 01 a 09):
-    Terminal 1:  ./servidor
-    Terminal 2:  ./cliente        (cliente A)
-    Terminal 3:  ./cliente        (cliente B)
-
-    No A: opcao 1 -> 10 / Abel
-    No A: opcao 1 -> 30 / Breno
-    >>> capture a tela do B agora (04-cliente-b-broadcast.png)
-    No B: opcao 1 -> 20 / Carlos
-    No B: opcao 1 -> 40 / Dario
-    No A: opcao 2  (05-ver-fila.png)
-    No A: opcao 3  (06-heartbeat-novidade.png)
-    No A: opcao 3  (07-heartbeat-alive.png)
-    No A: opcao 1 -> -7 / Teste   (08-caso-de-erro.png)
-    Terminal 4:  cat dados/fila.txt ; cat dados/historico.txt
-                 (09-persistencia.png)
-
-CARGA (capturas carga-*):
-    make carga
-    ulimit -n 20000
-
-    Para CADA teste, na ordem:
-      a) pare o servidor (Ctrl+C) e rode ./servidor de novo
-         -- isso e o que faz a numeracao comecar em [#1]
-      b) ./carga 100      (depois 1000, depois 10000)
-      c) capture a tela do SERVIDOR
-      d) ENTER no terminal do carga para encerrar as conexoes
+Para trocar qualquer uma, basta mudar o nome do arquivo na chamada
+\tela{} ou \telaDupla{} da secao correspondente do documentacao.tex.
 
 
-DEPOIS DE COLOCAR AS IMAGENS AQUI
----------------------------------
-Compile o documentacao.tex duas vezes. As molduras somem sozinhas e as
-figuras entram no lugar. Nao e preciso editar o .tex.
+RESSALVA NA 03-cliente-a-cadastro.png
+-------------------------------------
+
+Esta captura e de uma execucao ANTERIOR as outras. Nela o segundo cadastro
+aparece como:
+
+    ID: 12
+    Nome: Joarez Soares Pedro
+
+Enquanto a fila (05) e o historico (09) registram:
+
+    13 - Juarez Soares Pedro
+
+Ou seja: identificador diferente (12 contra 13) e grafia diferente
+(Joarez contra Juarez).
+
+Nao e defeito do sistema, e execucao diferente. Mas o professor pode ler
+como se o programa tivesse trocado o identificador ou o nome.
+
+Solucao provisoria aplicada: a legenda da figura no .tex NAO cita mais
+identificador nem nome, so descreve "dois cadastros feitos em sequencia".
+Assim nada se contradiz.
+
+Solucao definitiva, se sobrar tempo (leva menos de um minuto):
+refaca so essa captura, cadastrando 12/Marcos Castro e 13/Juarez Soares
+Pedro na mesma execucao das demais, salve por cima do arquivo e recompile.
+Depois disso da para voltar a citar os nomes na legenda.
