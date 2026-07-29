@@ -1,0 +1,1149 @@
+% =============================================================================
+%  DOCUMENTACAO DO TRABALHO DE REDES DE COMPUTADORES - UEMS
+%  Plataforma de Monitoramento Inteligente de Filas em Tempo Real
+%  Aluno: Victor Vendruscolo
+%
+%  COMO COMPILAR
+%    Motor: pdfLaTeX. No Overleaf, e o padrao (Menu > Compiler > pdfLaTeX).
+%    Compile duas vezes para o sumario e as referencias cruzadas fecharem.
+%
+%  IMAGENS
+%    Coloque as capturas de tela na subpasta figuras/, com os nomes exatos
+%    listados em figuras/LEIA-ME.txt. Enquanto um arquivo nao existir, o
+%    documento compila e mostra uma moldura no lugar, com o nome esperado.
+% =============================================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% --- Idioma e codificacao ---------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+
+% --- Fonte: Times, para acompanhar o documento do enunciado -----------------
+\usepackage{mathptmx}
+
+% --- Layout -----------------------------------------------------------------
+\usepackage[top=2.5cm,bottom=2.5cm,left=3cm,right=2.5cm]{geometry}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{3pt}
+% Permite quebra de linha dentro de nomes longos em fonte de maquina de
+% escrever (\texttt), evitando linhas que estouram a margem.
+\usepackage[htt]{hyphenat}
+\sloppy
+
+% --- Tabelas, figuras e codigo ---------------------------------------------
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{listings}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{ragged2e}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+% Coluna justificada de largura fixa, usada nas tabelas longas.
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+
+% --- Estilo dos trechos de codigo ------------------------------------------
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  commentstyle=\itshape,
+  language=C,
+  numbers=none,
+  frame=single,
+  framesep=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  captionpos=b,
+  xleftmargin=0.5cm,
+  xrightmargin=0.5cm
+}
+
+% --- Macro das capturas de tela ---------------------------------------------
+% Se o arquivo existir em figuras/, ele e inserido. Se nao existir, aparece
+% uma moldura com o nome esperado, e o documento continua compilando.
+\newcommand{\tela}[3]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{figuras/#1}{%
+      \includegraphics[width=#3\textwidth]{figuras/#1}%
+    }{%
+      \fbox{%
+        \begin{minipage}[c][4.5cm][c]{0.85\textwidth}
+          \centering\ttfamily\small
+          [CAPTURA PENDENTE]\\[6pt]
+          figuras/#1
+        \end{minipage}%
+      }%
+    }
+    \caption{#2}
+  \end{figure}%
+}
+
+\begin{document}
+
+% =============================================================================
+% CAPA - segue o layout do enunciado (trabalho_redes_2026.pdf), com o
+% acrescimo do nome do aluno, que o enunciado nao traz por ser o documento
+% do professor.
+% =============================================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+
+{\large Universidade Estadual de Mato Grosso do Sul}\\[10pt]
+{\large Curso de Ciência da Computação}\\[10pt]
+{\large Disciplina de Redes de Computadores}\\[10pt]
+{\large Trabalho de Redes de Computadores}
+
+\vspace{7cm}
+
+{\large \underline{\parbox{\textwidth}{\centering PLATAFORMA DE MONITORAMENTO INTELIGENTE DE FILAS\\ EM TEMPO REAL}}}
+
+\vspace{2cm}
+
+{\large Documentação}
+
+\vspace{1.5cm}
+
+{\large Victor Vendruscolo}
+
+\vfill
+
+{\large Dourados (MS), 29 de julho de 2026.}
+
+\end{center}
+\end{titlepage}
+
+% =============================================================================
+% SUMARIO
+% =============================================================================
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+
+\setcounter{page}{1}
+
+% =============================================================================
+% ITEM 1 - SUMARIO DO PROBLEMA
+% =============================================================================
+\section{Sumário do problema}
+
+Este trabalho implementa uma plataforma cliente-servidor para monitorar uma fila
+de atendimento em tempo real. Um servidor central mantém a fila; vários clientes
+se conectam ao mesmo tempo e operam sobre ela. O sistema foi escrito em C, sobre
+sockets TCP, e roda em Linux.
+
+O problema tratado é a falta de informação compartilhada em locais de
+atendimento ao público. Quando cada posto anota a fila por conta própria,
+ninguém sabe o estado real do atendimento. O enunciado cita superlotação, filas
+desorganizadas e ausência de atualização em tempo real como sintomas disso.
+
+A solução adotada centraliza a fila em um único servidor. Todo cliente que
+cadastra um usuário altera a mesma estrutura, e todos os demais são avisados na
+hora. Assim, o estado da fila é único e visível para todos os operadores
+conectados.
+
+O sistema oferece quatro operações, que reproduzem as telas do enunciado:
+
+\begin{itemize}
+  \item \textbf{Autenticação}: o cliente se identifica ao conectar, com uma
+        credencial fixa definida no código.
+  \item \textbf{Adicionar usuário}: o operador informa um identificador e um
+        nome, que entram na fila compartilhada.
+  \item \textbf{Ver fila}: o servidor devolve a fila completa, do primeiro ao
+        último registro.
+  \item \textbf{\textit{Heartbeat}}: o servidor devolve apenas os usuários
+        cadastrados por outros clientes desde a última verificação. Se não
+        houver novidade, devolve \texttt{ALIVE}.
+\end{itemize}
+
+Além dessas quatro operações pedidas, o servidor envia uma notificação
+espontânea. Sempre que alguém cadastra um usuário, todos os outros clientes
+recebem a mensagem de \textit{broadcast} sem terem pedido nada. É esse
+mecanismo que caracteriza o tempo real do sistema.
+
+\vspace{6pt}
+\noindent\textbf{Terminologia.} As telas do enunciado usam a palavra
+``paciente'', mas o texto do enunciado usa ``usuário''. Este documento adota
+\textbf{usuário} para quem entra na fila e \textbf{cliente} para o programa
+\texttt{./cliente} que se conecta e opera o sistema. São dois conceitos
+diferentes e a distinção vale para todo o documento.
+
+% =============================================================================
+% ITEM 2 - ALGORITMOS, TADs, FUNCOES E DECISOES
+% =============================================================================
+\section{Algoritmos, tipos de dados, funções e decisões}
+
+\subsection{Arquitetura geral}
+
+O sistema tem dois programas, ligados por uma conexão TCP na porta 8080. A
+persistência fica em arquivos de texto, do lado do servidor.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.9\textwidth}
+\ttfamily\footnotesize
+\begin{verbatim}
+                       porta 8080 (TCP)
+   [Cliente 1] ------------+
+   [Cliente 2] ------------+---> [Servidor] --- fila compartilhada (mutex)
+   [Cliente N] ------------+           |
+                                       +---> dados/*.txt (persistencia)
+\end{verbatim}
+\end{minipage}
+\caption{Arquitetura do sistema, correspondente ao diagrama do enunciado.}
+\end{figure}
+
+A técnica de múltiplos clientes escolhida foi \textbf{multithreads}
+(\texttt{pthreads}), uma das três permitidas pelo enunciado. O servidor cria uma
+thread para cada conexão aceita. Duas razões pesaram nessa escolha. A primeira é
+que a fila é compartilhada por todos os clientes: com threads, todas enxergam a
+mesma memória, e basta um \textit{mutex} para proteger o acesso. A segunda é que
+o \textit{broadcast} precisa alcançar sockets de outras conexões, o que também
+sai de graça no mesmo processo. Com \texttt{fork()}, as duas coisas exigiriam
+comunicação entre processos.
+
+A thread principal do servidor não atende nenhum cliente. Ela apenas aceita
+conexões, cria a thread correspondente e volta a aceitar. Isso atende
+literalmente ao enunciado, que reserva ao servidor principal apenas aceitar
+conexões, distribuir eventos e monitorar sockets.
+
+\begin{lstlisting}[caption={Laço principal do servidor, em \texttt{servidor.c}. A thread criada recebe uma \texttt{struct} própria, com o socket, o IP de origem e o número da conexão.}]
+for (;;) {
+    int  sock_cliente = accept(sock_escuta, ...);
+    ...
+    ArgumentoThread *arg = malloc(sizeof(ArgumentoThread));
+    arg->sock   = sock_cliente;
+    arg->numero = ++total_conexoes;
+    pthread_create(&thread, &atributos, atende_cliente, arg);
+}
+\end{lstlisting}
+
+\subsection{Tipo abstrato de dados: a fila}
+
+A fila é o dado central do sistema. Ela é um vetor de tamanho fixo, protegido
+por um único \textit{mutex}, e todo acesso passa pelas funções do módulo
+\texttt{fila.c}. Manter o acesso concentrado em um módulo torna impossível
+esquecer de travar.
+
+\begin{lstlisting}[caption={Tipo \texttt{Usuario} e estado interno da fila.}]
+typedef struct {
+    int  id;                    /* identificador digitado pelo operador */
+    char nome[TAM_NOME];        /* nome, terminado em '\0'              */
+} Usuario;
+
+static Usuario         fila[MAX_USUARIOS_FILA];  /* 20000 registros */
+static int             total;                    /* posicoes em uso */
+static pthread_mutex_t mutex;                    /* protege os dois */
+\end{lstlisting}
+
+O vetor foi preferido à lista ligada pela simplicidade. O limite de 20.000
+registros cobre com folga o teste de carga de 10.000 clientes, mesmo que cada um
+insira mais de um usuário. Esse limite é uma decisão de implementação declarada
+na Seção~\ref{sec:omissos}.
+
+Cada conexão guarda, por conta própria, um marcador do último índice da fila que
+já viu. É esse marcador que permite ao \textit{heartbeat} devolver apenas o que
+é novo para aquele cliente.
+
+\subsection{Protocolo de mensagens}
+\label{sec:protocolo}
+
+Toda mensagem é uma linha de texto ASCII terminada em \texttt{\textbackslash n}.
+O comando vem em maiúsculas, seguido dos argumentos separados por espaço. Essa
+escolha resolve o problema central de trabalhar sobre TCP: o TCP entrega um
+fluxo de bytes, não mensagens delimitadas, e uma chamada de \texttt{send()} não
+corresponde necessariamente a uma de \texttt{recv()}. Quem lê acumula os bytes em
+um buffer próprio até encontrar a quebra de linha.
+
+Respostas de várias linhas usam um cabeçalho e um rodapé fixos. O cliente lê
+linha a linha até bater no rodapé, sem precisar saber quantas linhas virão. É o
+formato que o próprio enunciado mostra nas telas.
+
+\begin{table}[H]
+\centering
+\caption{Mensagens do cliente para o servidor.}
+\footnotesize
+\begin{tabular}{L{3.2cm} L{5.6cm} L{4.4cm}}
+\toprule
+\textbf{Operação} & \textbf{Formato} & \textbf{Quando} \\
+\midrule
+Login & \texttt{LOGIN <usuario> <senha>} & Primeira mensagem da sessão \\
+Adicionar usuário & \texttt{ADD <seq> <id> <nome>} & Opção \texttt{1} do menu \\
+Ver fila & \texttt{LIST <seq>} & Opção \texttt{2} do menu \\
+\textit{Heartbeat} & \texttt{HEARTBEAT <seq>} & Opção \texttt{3} do menu \\
+Sair & \texttt{SAIR} & Opção \texttt{0} do menu \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Mensagens do servidor para o cliente.}
+\footnotesize
+\begin{tabular}{L{3.2cm} L{5.6cm} L{4.4cm}}
+\toprule
+\textbf{Resposta} & \textbf{Formato} & \textbf{Quando} \\
+\midrule
+Login aceito & \texttt{LOGIN\_OK} & A credencial confere \\
+Login recusado & \texttt{LOGIN\_FAIL} & A credencial não confere; o servidor fecha a conexão \\
+Usuário inserido & \texttt{ADD\_OK <id> <nome>} & Após gravar na fila e disparar o \textit{broadcast} \\
+Fila & \texttt{===== FILA =====} \newline \texttt{<id> - <nome>} $\times$ N \newline \texttt{================} & Resposta de \texttt{LIST} \\
+\textit{Heartbeat} com novidade & Mesmo formato da fila, só com os registros de outros clientes & Resposta de \texttt{HEARTBEAT} \\
+\textit{Heartbeat} sem novidade & \texttt{ALIVE} & Resposta de \texttt{HEARTBEAT} \\
+Erro & \texttt{ERRO <descrição>} & Comando inválido; a conexão continua aberta \\
+\midrule
+\textit{Broadcast} & \texttt{[Broadcast] Novo usuario: <nome>} & Mensagem não solicitada, enviada a todos os clientes menos ao autor do \texttt{ADD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O número de sequência \texttt{<seq>} acompanha todo comando posterior ao login.
+Ele começa em 1 e aumenta a cada novo comando daquela conexão. Sua função é
+sustentar a retransmissão, tratada na Seção~\ref{sec:retransmissao}.
+
+\subsection{Módulos e funções}
+
+O código está dividido em seis módulos, além dos dois programas principais e do
+gerador de carga. Cada arquivo tem uma responsabilidade só.
+
+{\footnotesize
+\begin{longtable}{L{2.8cm} L{4.1cm} L{6.3cm}}
+\caption{Módulos do sistema e suas funções principais.}\\
+\toprule
+\textbf{Arquivo} & \textbf{Responsabilidade} & \textbf{Funções principais} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Arquivo} & \textbf{Responsabilidade} & \textbf{Funções principais} \\
+\midrule
+\endhead
+\texttt{comum.h} &
+Constantes, tipo \texttt{Usuario} e textos do protocolo &
+Somente definições \\
+\addlinespace
+\texttt{protocolo.c/.h} &
+Envio e leitura de mensagens delimitadas por linha &
+\texttt{protocolo\_leitor\_init}, \texttt{protocolo\_le\_linha}, \texttt{protocolo\_envia\_linha}, \texttt{protocolo\_limpa\_bordas} \\
+\addlinespace
+\texttt{fila.c/.h} &
+Fila compartilhada protegida por \textit{mutex} &
+\texttt{fila\_init}, \texttt{fila\_adiciona}, \texttt{fila\_tamanho}, \texttt{fila\_copia\_intervalo} \\
+\addlinespace
+\texttt{sessoes.c/.h} &
+Registro dos clientes conectados e envio do \textit{broadcast} &
+\texttt{sessoes\_init}, \texttt{sessoes\_registra}, \texttt{sessoes\_remove}, \texttt{sessoes\_broadcast}, \texttt{sessoes\_trava\_envio}, \texttt{sessoes\_libera\_envio} \\
+\addlinespace
+\texttt{persistencia.c/.h} &
+Gravação nos quatro arquivos de texto &
+\texttt{persistencia\_init}, \texttt{persistencia\_log\_servidor}, \texttt{persistencia\_log\_sessao}, \texttt{persistencia\_historico\_add}, \texttt{persistencia\_salva\_fila} \\
+\addlinespace
+\texttt{servidor.c} &
+Aceitação de conexões e atendimento &
+\texttt{main}, \texttt{atende\_cliente}, \texttt{autentica}, \texttt{trata\_add}, \texttt{trata\_list}, \texttt{trata\_heartbeat}, \texttt{envia\_bloco\_fila}, \texttt{envia\_resposta}, \texttt{verifica\_sequencia}, \texttt{guarda\_resposta\_add}, \texttt{nome\_valido} \\
+\addlinespace
+\texttt{cliente.c} &
+Interface de operação &
+\texttt{main}, \texttt{conecta\_ao\_servidor}, \texttt{autentica}, \texttt{thread\_receptora}, \texttt{envia\_comando}, \texttt{imprime\_resposta}, \texttt{opcao\_adicionar\_usuario}, \texttt{opcao\_ver\_fila}, \texttt{opcao\_heartbeat}, \texttt{mostra\_menu} \\
+\addlinespace
+\texttt{carga.c} &
+Gerador automático de clientes para o teste de carga &
+\texttt{main}, \texttt{conecta}, \texttt{autentica} \\
+\addlinespace
+\texttt{Makefile} &
+Compilação &
+Alvos \texttt{all} (padrão), \texttt{carga}, \texttt{tudo}, \texttt{clean} \\
+\bottomrule
+\end{longtable}}
+
+O \texttt{Makefile} sem parâmetros gera exatamente os dois programas exigidos,
+\texttt{cliente} e \texttt{servidor}. O gerador de carga ficou em um alvo
+separado, \texttt{make carga}, justamente para não acrescentar um terceiro
+executável ao alvo padrão.
+
+Não existem \texttt{servidor.h} nem \texttt{cliente.h}. Um cabeçalho não faz
+sentido para um módulo que só contém o \texttt{main} e funções privadas ao
+arquivo, todas declaradas \texttt{static}.
+
+\subsection{Algoritmos principais}
+
+\subsubsection*{Atendimento de um cliente}
+
+Cada thread executa sempre a mesma sequência. Ela autentica a conexão, registra
+a sessão, processa comandos em laço e limpa tudo ao final.
+
+\begin{enumerate}
+  \item Ler a primeira linha e conferir a credencial. Se falhar, responder
+        \texttt{LOGIN\_FAIL} e fechar a conexão.
+  \item Registrar a sessão na tabela de sessões, para o \textit{broadcast}
+        encontrá-la.
+  \item Em laço: ler uma linha, identificar o comando pela primeira palavra e
+        chamar o tratador correspondente.
+  \item Ao receber \texttt{SAIR}, ou quando o \texttt{recv()} indicar que a
+        conexão caiu, remover a sessão e fechar o socket.
+\end{enumerate}
+
+\subsubsection*{Inserção e \textit{broadcast}}
+
+O tratador de \texttt{ADD} valida os dados, insere na fila e avisa os demais. A
+ordem importa: a inserção acontece antes da notificação, para nenhum cliente ser
+avisado de um registro que ainda não existe.
+
+\begin{enumerate}
+  \item Separar sequência, identificador e nome da linha recebida.
+  \item Validar: identificador positivo, nome não vazio e dentro do limite de
+        49 caracteres.
+  \item Conferir o número de sequência. Se for repetido, devolver a resposta
+        guardada e encerrar aqui.
+  \item Inserir na fila, com o \textit{mutex} travado.
+  \item Gravar no histórico e reescrever o retrato da fila.
+  \item Enviar o \textit{broadcast} a todas as sessões, exceto à de origem.
+  \item Responder \texttt{ADD\_OK} ao autor e guardar essa resposta.
+\end{enumerate}
+
+\subsubsection*{\textit{Heartbeat}}
+
+O algoritmo compara o marcador da conexão com o tamanho atual da fila. Se o
+tamanho for maior, o servidor devolve os registros do intervalo e avança o
+marcador. Se não, devolve \texttt{ALIVE}.
+
+Há um detalhe necessário para a regra funcionar. Quando o próprio cliente faz um
+\texttt{ADD}, seu marcador avança na hora. Sem isso, o \textit{heartbeat}
+devolveria a ele o usuário que ele mesmo acabou de cadastrar, o que contraria a
+definição de ``usuários cadastrados por outros clientes''.
+
+\subsection{Decisões de implementação}
+
+{\footnotesize
+\begin{longtable}{L{4.6cm} L{8.6cm}}
+\caption{Principais decisões tomadas durante a codificação.}\\
+\toprule
+\textbf{Decisão} & \textbf{Motivo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Decisão} & \textbf{Motivo} \\
+\midrule
+\endhead
+O cliente também usa duas threads: uma lê o socket, a outra lê o teclado &
+Com um fluxo só, o programa ficaria preso no \texttt{fgets} e a notificação de
+\textit{broadcast} só apareceria quando o operador digitasse algo. Isso
+contraria a exigência de atualização em tempo real. A thread receptora é a única
+que chama \texttt{recv()} \\
+\addlinespace
+O texto que trafega na rede é ASCII puro; a acentuação existe só na exibição &
+O enunciado especifica texto ASCII e o tráfego será comparado com esta
+documentação. Bytes iguais em qualquer máquina evitam divergência por
+codificação. O cliente reescreve a mensagem com acento apenas ao mostrá-la na
+tela \\
+\addlinespace
+A fila é lida em lotes de 32 registros ao ser enviada &
+Mantém o \textit{mutex} travado por intervalos curtos. Uma listagem longa não
+impede outros clientes de inserir \\
+\addlinespace
+O nome é validado uma única vez, no servidor &
+Corrige um defeito encontrado em teste. O nome era cortado ao entrar na fila,
+mas a confirmação e o histórico usavam o texto original. Hoje fila, histórico,
+\textit{broadcast} e resposta usam exatamente o mesmo texto \\
+\addlinespace
+O socket vai para a thread dentro de uma \texttt{struct} alocada, não como
+inteiro convertido em ponteiro &
+Converter \texttt{int} em \texttt{void*} não é portável em 64 bits. A
+\texttt{struct} ainda permite levar o IP de origem e o número da conexão junto \\
+\addlinespace
+As threads são criadas já desatachadas &
+Equivale a chamar \texttt{pthread\_detach} logo após a criação, com uma chamada a
+menos por conexão. Faz diferença em 10.000 conexões \\
+\addlinespace
+O servidor não tem encerramento ordenado &
+Ele roda até ser interrompido. Como toda gravação é seguida de \texttt{fflush},
+nada se perde, e o sistema operacional libera os recursos do processo. Evita
+código que nunca é executado \\
+\bottomrule
+\end{longtable}}
+
+O código passou por uma revisão deliberada depois de funcionar. Sete mecanismos
+que existiam por precaução, e não por necessidade, foram removidos, entre eles o
+\texttt{pthread\_rwlock\_t} da tabela de sessões e o tratador de
+\texttt{SIGINT}. O programa saiu de 1.545 para 1.326 linhas de código sem perder
+nenhuma funcionalidade, e toda a bateria de testes foi repetida com resultados
+idênticos.
+
+% =============================================================================
+% ITEM 3 - DECISOES OMISSAS NA ESPECIFICACAO
+% =============================================================================
+\section{Decisões de implementação omissas na especificação}
+\label{sec:omissos}
+
+O enunciado exige que qualquer elemento não especificado, mas necessário para o
+protocolo funcionar, seja descrito de forma explícita. Esta seção é essa
+declaração. Ela cobre quatro grupos: o que foi acrescentado, o que foi decidido
+diante de ambiguidade, o que ficou fora de escopo e as limitações conhecidas.
+
+\subsection{Elementos acrescentados por necessidade do protocolo}
+
+\begin{enumerate}
+  \item \textbf{Tabela de sessões} (\texttt{sessoes.c}). O \textit{broadcast}
+        exige saber, a cada instante, quais sockets estão conectados e
+        autenticados. Implementada como vetor de tamanho fixo
+        (\texttt{MAX\_SESSOES = 12000}), protegido por um \textit{mutex}.
+
+  \item \textbf{Serialização de escrita por socket.} Sem ela, uma mensagem de
+        \textit{broadcast} disparada por outra thread poderia entrar no meio de
+        uma resposta de várias linhas e quebrar o protocolo. Cada sessão tem um
+        \textit{mutex} de envio próprio, mantido travado do cabeçalho ao rodapé
+        do bloco.
+
+  \item \textbf{Regra para evitar impasse (\textit{deadlock}).} O \textit{mutex}
+        de envio de uma sessão é obtido sem travar a tabela. Quem o obtém é a
+        própria thread dona da sessão, e só ela remove aquela entrada, então a
+        entrada existe com certeza. A regra que sustenta isso: uma thread nunca
+        remove a própria sessão enquanto segura o \textit{mutex} de envio dela.
+
+  \item \textbf{Sinal \texttt{SIGPIPE} ignorado}, no cliente e no servidor.
+        Escrever em um socket que o outro lado já fechou gera esse sinal, cujo
+        comportamento padrão é encerrar o processo inteiro. Ignorá-lo transforma
+        a situação em um erro de retorno, que o código já trata.
+
+  \item \textbf{Pilha reduzida das threads}, de 8~MB para 256~KB, definida por
+        \texttt{pthread\_attr\_setstacksize}. Com o valor padrão, 10.000 threads
+        reservariam 80~GB de espaço de endereçamento e o teste de carga seria
+        impossível.
+
+  \item \textbf{Numeração das conexões nas linhas de log.} As mensagens começam
+        exatamente com o texto das telas do enunciado e recebem, no fim, o
+        número sequencial e a origem --- por exemplo,
+        \texttt{Novo cliente conectado. [\#4271] 192.168.0.20:51344}. Sem isso,
+        o print do teste de 10.000 clientes seria uma parede de linhas
+        idênticas, e o enunciado exige que seja possível identificar todas as
+        conexões.
+\end{enumerate}
+
+\subsection{Pontos ambíguos e como foram resolvidos}
+
+{\footnotesize
+\begin{longtable}{L{4.6cm} L{8.6cm}}
+\caption{Pontos em aberto no enunciado e a decisão adotada.}\\
+\toprule
+\textbf{Ponto} & \textbf{Decisão} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Ponto} & \textbf{Decisão} \\
+\midrule
+\endhead
+\textit{Heartbeat}: texto da Observação contra o \textit{print} &
+A Observação diz que a função devolve os usuários cadastrados por outros
+clientes, ou \texttt{ALIVE}. O \textit{print} mostra a fila inteira. Seguimos o
+texto, por ser a especificação escrita \\
+\addlinespace
+``Atualizar filas em tempo real'' no cliente &
+Implementado como notificação assíncrona do novo usuário, não como réplica local
+da fila. É o que os \textit{prints} mostram. O operador pede a fila completa com
+a opção \texttt{2} quando quiser \\
+\addlinespace
+Terminologia ``paciente'' contra ``usuário'' &
+Adotado ``usuário'', termo usado no texto do enunciado \\
+\addlinespace
+Persistência: banco de dados ou arquivo &
+Arquivo de texto, opção permitida pelo enunciado. Quatro arquivos, descritos na
+Seção~\ref{sec:persistencia} \\
+\addlinespace
+Endereço do servidor &
+Constante \texttt{SERVER\_IP} em \texttt{comum.h}, alterada e recompilada ao
+mudar de máquina. Nenhum código visto na disciplina faz descoberta dinâmica de
+rede \\
+\addlinespace
+Autenticação &
+Usuário e senha fixos no código, sem validação contra arquivo ou banco. Uma
+credencial única, coerente com o sistema ter um único tipo de operador \\
+\addlinespace
+Unicidade de identificador &
+Não há verificação. Dois usuários podem ter o mesmo identificador, e nada no
+enunciado exige o contrário \\
+\addlinespace
+Capacidade da fila &
+Limite fixo de 20.000 registros. Ao encher, o servidor responde
+\texttt{ERRO Fila cheia} sem derrubar nada \\
+\addlinespace
+Tamanho do nome &
+Até 49 caracteres. Acima disso o cadastro é recusado, não cortado \\
+\addlinespace
+Identificador inválido &
+Recusado se for menor ou igual a zero \\
+\addlinespace
+Recuperação da fila &
+O servidor sempre inicia com a fila vazia e não recarrega \texttt{fila.txt}. Os
+arquivos de log e histórico continuam existindo entre execuções \\
+\bottomrule
+\end{longtable}}
+
+A recusa do nome longo merece uma justificativa. Cortar o nome traria dois
+problemas: o cliente receberia a confirmação de um nome diferente do que enviou,
+e o corte em 49 bytes poderia cair no meio de um caractere acentuado, que ocupa
+dois bytes. Nomes com acento são aceitos normalmente.
+
+\subsection{Escopo declarado: o que não foi implementado}
+
+A introdução do enunciado cita funcionalidades que não aparecem nas telas, na
+Observação nem nos oito itens exigidos desta documentação. Elas ficaram fora de
+escopo, e a decisão está declarada aqui, como o enunciado exige.
+
+{\footnotesize
+\begin{longtable}{L{4.6cm} L{8.6cm}}
+\caption{Funcionalidades citadas apenas na introdução e não implementadas.}\\
+\toprule
+\textbf{Item} & \textbf{Motivo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Item} & \textbf{Motivo} \\
+\midrule
+\endhead
+Painéis administrativos &
+Citado apenas na introdução. Exigiria um tipo de cliente com interface própria,
+que não aparece em nenhuma tela \\
+\addlinespace
+Balanceamento de carga &
+Pressupõe mais de um servidor. A arquitetura do enunciado mostra um servidor
+central único \\
+\addlinespace
+Métricas em tempo real para administradores &
+Depende do painel administrativo \\
+\addlinespace
+Papéis distintos de recepcionista, coordenador e administrador &
+O sistema tem um único tipo de operador, coerente com a credencial única
+prevista para o login \\
+\addlinespace
+Posição numérica do usuário na fila &
+A resposta de \texttt{LIST} segue o formato exato do \textit{print}
+(\texttt{id - nome}), sem número de posição. A ordem das linhas já é a ordem de
+atendimento \\
+\addlinespace
+Acompanhamento via aplicativo ou página web &
+O enunciado determina cliente e servidor em C, iniciados por linha de comando \\
+\bottomrule
+\end{longtable}}
+
+\subsection{Limitação conhecida: estouro de inteiro no identificador}
+
+O identificador é lido com \texttt{sscanf(entrada, "\%d", \&id)}. Um número acima
+do limite do tipo \texttt{int} sofre estouro silencioso e é gravado com outro
+valor. Em teste, \texttt{99999999999999} entrou na fila como
+\texttt{276447231}.
+
+Identificadores negativos e zero são recusados, mas o estouro produz um valor
+positivo, então passa pela validação. Corrigir exigiria voltar a
+\texttt{strtol} com verificação de \texttt{errno}. Como é um comportamento comum
+em C e sem efeito sobre o funcionamento do sistema, a limitação foi registrada
+em vez de contornada.
+
+\subsection{Persistência em arquivos de texto}
+\label{sec:persistencia}
+
+O enunciado permite escolher entre banco de dados e arquivo. A escolha foi
+arquivo de texto, e os dados foram separados em quatro, distinguindo o que é do
+\textbf{cliente} do que é do \textbf{usuário}.
+
+\begin{table}[H]
+\centering
+\caption{Arquivos gerados pelo servidor, no subdiretório \texttt{dados/}.}
+\footnotesize
+\begin{tabular}{L{3.4cm} L{5.6cm} L{4.2cm}}
+\toprule
+\textbf{Arquivo} & \textbf{Conteúdo} & \textbf{Quando grava} \\
+\midrule
+\texttt{sessoes.log} & \texttt{LOGIN <ip> <data e hora>} e \texttt{LOGOUT <ip> <data e hora>} & A cada entrada e saída de cliente \\
+\texttt{servidor.log} & Os mesmos eventos que aparecem na tela do servidor & A cada evento de conexão \\
+\texttt{fila.txt} & Retrato atual da fila completa & Reescrito a cada \texttt{ADD} \\
+\texttt{historico.txt} & Registro permanente: \texttt{<data e hora> ADD <id> <nome>} & A cada \texttt{ADD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O arquivo \texttt{historico.txt} atende a dois dos itens pedidos pelo enunciado
+ao mesmo tempo. Cada linha registra um usuário cadastrado com data e hora,
+servindo tanto como cadastro de usuários quanto como histórico.
+
+% =============================================================================
+% ITEM 4 - RETRANSMISSAO
+% =============================================================================
+\section{Retransmissão de mensagens}
+\label{sec:retransmissao}
+
+\subsection{O que precisava ser garantido}
+
+O TCP garante entrega ordenada e sem perda enquanto a conexão está de pé. Ele
+garante que os bytes chegaram à outra máquina, mas não que a aplicação do outro
+lado processou o pedido. Se o servidor estiver vivo e travado, ou se a conexão
+cair no meio de uma operação, o TCP não resolve o problema do cliente.
+
+A retransmissão implementada é, portanto, do nível da aplicação. Ela responde a
+duas perguntas: como o cliente sabe que seu comando foi processado, e o que ele
+faz quando não sabe.
+
+\subsection{Mecanismo adotado}
+
+O mecanismo tem três partes, e nenhuma delas usa uma mensagem de confirmação
+separada.
+
+\vspace{6pt}
+\noindent\textbf{1. A resposta é a confirmação.} Toda resposta listada na
+Seção~\ref{sec:protocolo} funciona como confirmação do pedido correspondente. O
+\texttt{ADD\_OK} confirma que o \texttt{ADD} foi recebido e processado. Não
+existe uma mensagem \texttt{ACK} à parte.
+
+\vspace{6pt}
+\noindent\textbf{2. Tempo limite e reenvio.} Depois de enviar um comando, o
+cliente espera a resposta por até \textbf{3 segundos}. Se o prazo estourar, ele
+reenvia o mesmo comando, até um total de \textbf{3 tentativas}. Se as três
+falharem, avisa o operador com \texttt{Servidor não respondeu, tente novamente.}
+e volta ao menu.
+
+\vspace{6pt}
+\noindent\textbf{3. Número de sequência e idempotência.} Cada comando carrega um
+número de sequência próprio daquela conexão. O servidor guarda o último número
+processado. Se receber um número repetido, ele devolve a mesma resposta de antes
+\textbf{sem processar de novo}. É isso que impede um reenvio de cadastrar o
+mesmo usuário duas vezes.
+
+Do lado do cliente há uma regra complementar. Uma resposta só é exibida se
+houver um comando esperando por ela. Cópias atrasadas, que chegam depois de o
+cliente ter desistido, são descartadas em silêncio. Sem essa regra, uma cópia
+atrasada seria confundida com a resposta do comando seguinte.
+
+\subsection{Avaliação honesta do mecanismo}
+
+Sobre uma única conexão TCP, o reenvio é em boa parte redundante, porque o
+próprio TCP já retransmite segmentos perdidos. Vale reconhecer isso.
+
+O que de fato agrega é o \textbf{número de sequência}. Ele é o que torna a
+operação idempotente e impede que um comando repetido produza efeito duplicado.
+Essa garantia o TCP não oferece, porque ela é sobre o processamento na
+aplicação, não sobre a entrega dos bytes.
+
+% =============================================================================
+% ITEM 5 - TESTES E ANALISE
+% =============================================================================
+\section{Testes e análise}
+
+\subsection{Como os testes foram feitos}
+
+Os testes seguiram três frentes, todas repetidas a cada alteração do código:
+
+\begin{enumerate}
+  \item \textbf{Teste funcional} --- dois clientes reproduzindo a sequência das
+        telas do enunciado.
+  \item \textbf{Casos especiais} --- um programa em Python conversando direto com
+        o servidor pelo socket, enviando comandos válidos e inválidos e
+        conferindo cada resposta. Falar o protocolo em texto permite testar
+        situações que o \texttt{./cliente} não deixaria acontecer, como um
+        comando malformado ou um comando antes do login.
+  \item \textbf{Carga} --- o programa \texttt{carga.c}, com 100, 1.000 e 10.000
+        clientes.
+\end{enumerate}
+
+\subsection{Teste funcional}
+
+\begin{table}[H]
+\centering
+\caption{Teste funcional com dois clientes conectados ao mesmo servidor.}
+\footnotesize
+\begin{tabular}{c L{4.4cm} L{6.0cm} c}
+\toprule
+\textbf{\#} & \textbf{Ação} & \textbf{Resultado esperado} & \textbf{Obtido} \\
+\midrule
+1 & Clientes A e B conectam & \texttt{Conectado ao servidor.} e \texttt{Servidor: LOGIN\_OK} & OK \\
+2 & A cadastra \texttt{10/Abel} e \texttt{30/Breno} & \texttt{Usuário Abel adicionado.} & OK \\
+3 & B recebe as notificações & \texttt{[Broadcast] Novo usuário: Abel} e \texttt{Breno} & OK \\
+4 & B cadastra \texttt{20/Carlos} e \texttt{40/Dario} & Confirmação em B, \textit{broadcast} em A & OK \\
+5 & A escolhe \texttt{2} & Os quatro usuários, entre cabeçalho e rodapé & OK \\
+6 & A escolhe \texttt{3} & Só \texttt{20 - Carlos} e \texttt{40 - Dario}, cadastrados por B & OK \\
+7 & B escolhe \texttt{3} & \texttt{Heartbeat: ALIVE}, pois B só cadastrou os próprios & OK \\
+8 & Ambos escolhem \texttt{0} & \texttt{Cliente desconectado.} na tela do servidor & OK \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O passo 7 confere com o \textit{print} do enunciado, que também mostra
+\texttt{ALIVE} para o cliente que acabou de cadastrar. O passo 6 é onde seguimos
+o texto da Observação em vez do \textit{print}: o \textit{print} mostra a fila
+inteira, e o sistema devolve apenas os usuários de outros clientes.
+
+\subsection{Casos especiais: 30 de 30 aprovados}
+
+Foram testados 30 casos especiais, agrupados por tema. Todos passaram. Em todos
+os casos de comando inválido, \textbf{a conexão permanece aberta} --- um erro do
+operador não derruba o cliente.
+
+{\footnotesize
+\begin{longtable}{c L{6.0cm} L{6.0cm}}
+\caption{Casos especiais testados e resposta obtida.}\\
+\toprule
+\textbf{\#} & \textbf{Situação testada} & \textbf{Resposta obtida} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{\#} & \textbf{Situação testada} & \textbf{Resposta obtida} \\
+\midrule
+\endhead
+\multicolumn{3}{l}{\textit{Autenticação}}\\
+\addlinespace
+1 & Senha errada & \texttt{LOGIN\_FAIL} \\
+2 & Conexão após falha de login & Encerrada pelo servidor \\
+3 & \texttt{LOGIN} sem a senha & \texttt{LOGIN\_FAIL} \\
+4 & Comando antes do login & \texttt{LOGIN\_FAIL} \\
+5 & Credencial correta & \texttt{LOGIN\_OK} \\
+\addlinespace
+\multicolumn{3}{l}{\textit{Comandos malformados}}\\
+\addlinespace
+6 & Comando inexistente & \texttt{ERRO Comando desconhecido} \\
+7 & \texttt{ADD} sem argumento & \texttt{ERRO Formato esperado...} \\
+8 & \texttt{ADD} só com a sequência & \texttt{ERRO Formato esperado...} \\
+9 & \texttt{ADD} com identificador não numérico & \texttt{ERRO Formato esperado...} \\
+10 & \texttt{ADD} sem o nome & \texttt{ERRO Nome invalido...} \\
+11 & \texttt{LIST} sem número de sequência & \texttt{ERRO Formato esperado...} \\
+12 & \texttt{HEARTBEAT} sem número de sequência & \texttt{ERRO Formato esperado...} \\
+13 & Linha em branco & Ignorada; a conexão segue \\
+\addlinespace
+\multicolumn{3}{l}{\textit{Validação de dados}}\\
+\addlinespace
+14 & Identificador negativo & \texttt{ERRO O identificador deve ser um numero positivo} \\
+15 & Identificador zero & \texttt{ERRO ...numero positivo} \\
+16 & Nome com 60 caracteres & \texttt{ERRO Nome invalido, vazio ou longo demais} \\
+17 & Nome com espaços & Aceito \\
+18 & Nome com acentos & Aceito \\
+\addlinespace
+\multicolumn{3}{l}{\textit{Retransmissão, lado do servidor}}\\
+\addlinespace
+19 & \texttt{ADD} repetido com o mesmo número de sequência & Mesma resposta \texttt{ADD\_OK 10 Abel} \\
+20 & Fila após o \texttt{ADD} repetido & Um único registro; não duplicou \\
+21 & Sequência menor que a última processada & \texttt{ERRO Numero de sequencia invalido} \\
+22 & Sequência zero & \texttt{ERRO Numero de sequencia invalido} \\
+\addlinespace
+\multicolumn{3}{l}{\textit{Heartbeat e broadcast}}\\
+\addlinespace
+23 & \textit{Broadcast} chega ao outro cliente & \texttt{[Broadcast] Novo usuario: Breno} \\
+24 & \textit{Heartbeat} com novidade & Só \texttt{30 - Breno}, cadastrado por outro \\
+25 & O mesmo \textit{heartbeat} reenviado & Bloco idêntico ao anterior \\
+26 & \textit{Heartbeat} seguinte, sem novidade & \texttt{ALIVE} \\
+27 & Esse \textit{heartbeat} reenviado & \texttt{ALIVE} de novo \\
+28 & Novo cadastro e novo \textit{heartbeat} & Só \texttt{40 - Dario}, o registro novo \\
+29 & Esse \textit{heartbeat} reenviado & Mesmo bloco \\
+\addlinespace
+\multicolumn{3}{l}{\textit{Falha de conexão}}\\
+\addlinespace
+30 & Cliente cai sem enviar \texttt{SAIR} & O servidor detecta, remove a sessão e continua atendendo os demais \\
+\bottomrule
+\end{longtable}}
+
+\vspace{6pt}
+\noindent\textbf{Análise.} Os casos 25, 27 e 29 são os mais importantes do
+conjunto. Eles comprovam a idempotência: reenviar um comando devolve exatamente
+a mesma resposta e não avança o marcador do que já foi visto. Sem essa
+propriedade, o mecanismo de retransmissão da Seção~\ref{sec:retransmissao} seria
+inseguro, porque cada reenvio produziria um efeito novo.
+
+O caso 30 comprova que a queda abrupta de um cliente é tratada como um evento
+normal. O \texttt{recv()} devolve zero quando o outro lado fecha, e a thread sai
+do laço, remove a sessão e fecha o socket, sem afetar as demais.
+
+\subsection{Retransmissão vista do lado do cliente}
+
+O comportamento do cliente foi testado contra um servidor de mentira, que aceita
+o login e depois não responde a mais nada. O objetivo era forçar o tempo limite.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.75\textwidth}
+\ttfamily\footnotesize
+\begin{verbatim}
+t = 0,0s   servidor recebeu: ADD 1 10 Abel
+t = 3,0s   servidor recebeu: ADD 1 10 Abel
+t = 6,0s   servidor recebeu: ADD 1 10 Abel
+\end{verbatim}
+\end{minipage}
+\caption{Registro do servidor de mentira durante o teste de retransmissão.}
+\end{figure}
+
+Os resultados confirmaram o projetado:
+
+\begin{itemize}
+  \item exatamente 3 envios, um a cada 3 segundos;
+  \item os três com o mesmo número de sequência, que é o que permite ao servidor
+        reconhecer o reenvio;
+  \item o cliente avisou o operador ao fim das tentativas;
+  \item o servidor de mentira enviou depois 3 cópias atrasadas da resposta, e o
+        cliente ignorou todas, porque já não havia comando esperando;
+  \item o comando seguinte funcionou normalmente, sem confusão.
+\end{itemize}
+
+\subsection{Compilação}
+
+\begin{table}[H]
+\centering
+\caption{Verificações de compilação.}
+\small
+\begin{tabular}{L{7.6cm} L{5.4cm}}
+\toprule
+\textbf{Verificação} & \textbf{Resultado} \\
+\midrule
+\texttt{make} sem parâmetros & Gera exatamente \texttt{cliente} e \texttt{servidor} \\
+Avisos com \texttt{-Wall -Wextra} & Nenhum \\
+Avisos com \texttt{-Wpedantic -Wshadow -Wconversion -Wsign-conversion -Wcast-align -Wnull-dereference} & Nenhum \\
+Compilação com \texttt{-std=c99}, \texttt{-std=c11} e \texttt{-std=c17}, com e sem \texttt{-O2} & Sem erro e sem aviso nas oito combinações \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =============================================================================
+% ITEM 6 - CARGA
+% =============================================================================
+\section{Teste de carga com 100, 1.000 e 10.000 clientes}
+
+\subsection{Como a carga foi gerada}
+
+A geração é automática, feita pelo programa \texttt{carga.c} --- o segundo
+código cliente que o enunciado permite expressamente. Ele repete
+\texttt{socket()}, \texttt{connect()} e login $N$ vezes, e recebe a quantidade
+como parâmetro:
+
+\begin{lstlisting}[caption={Comandos usados no teste de carga.},language=bash]
+make carga
+./carga 100
+./carga 1000
+./carga 10000
+\end{lstlisting}
+
+Duas providências foram necessárias para o teste medir o que devia medir. A
+primeira: as conexões ficam \textbf{todas abertas ao mesmo tempo} até o operador
+pressionar ENTER. Sem isso, o programa estaria abrindo e fechando conexões em
+sequência, e o servidor nunca precisaria sustentar mais de uma por vez. A
+segunda: cada cliente gerado \textbf{também se autentica}, ocupando uma sessão
+no servidor exatamente como um \texttt{./cliente}.
+
+O servidor foi reiniciado antes de cada teste, para a numeração das conexões
+começar em \texttt{[\#1]}. Antes do teste de 10.000, o limite de descritores de
+arquivo do terminal foi elevado com \texttt{ulimit -n 20000}.
+
+\subsection{Resultados}
+
+\begin{table}[H]
+\centering
+\caption{Resultado dos três testes de carga.}
+\footnotesize
+\begin{tabular}{r r r l r}
+\toprule
+\textbf{Clientes} & \textbf{Conexões abertas} & \textbf{Falhas} & \textbf{Numeração no servidor} & \textbf{Sessões autenticadas} \\
+\midrule
+100 & 100 & 0 & \texttt{[\#1]} a \texttt{[\#100]} & 100 \\
+1.000 & 1.000 & 0 & \texttt{[\#1]} a \texttt{[\#1000]} & 1.000 \\
+10.000 & 10.000 & 0 & \texttt{[\#1]} a \texttt{[\#10000]} & 10.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Depois de cada teste, um cliente comum foi executado e operou normalmente. Isso
+mostra que o servidor não ficou em estado ruim após sustentar a carga.
+
+\tela{carga-100.png}{Tela do servidor durante o teste com 100 clientes, com as conexões numeradas de \texttt{[\#1]} a \texttt{[\#100]}.}{0.9}
+
+\tela{carga-1000.png}{Tela do servidor durante o teste com 1.000 clientes.}{0.9}
+
+\tela{carga-10000.png}{Tela do servidor durante o teste com 10.000 clientes.}{0.9}
+
+\subsection{Análise dos resultados}
+
+\noindent\textbf{Por que 10.000 threads couberam.} Cada thread é criada com
+pilha de 256~KB, definida por \texttt{pthread\_attr\_setstacksize}. Com o padrão
+do sistema, de 8~MB, 10.000 threads reservariam 80~GB de espaço de
+endereçamento e o teste seria impossível. Com 256~KB, o total fica em torno de
+2,5~GB de memória virtual, que é espaço reservado e não ocupado fisicamente.
+
+\vspace{6pt}
+\noindent\textbf{Por que as linhas não saem em ordem numérica perfeita.} No
+teste de 100 clientes, a linha \texttt{[\#99]} apareceu depois da
+\texttt{[\#100]}. Isso não é defeito. Cada conexão é atendida por uma thread
+diferente, e a ordem em que elas escrevem no terminal depende de qual thread o
+sistema escalona primeiro. O número é atribuído no momento da aceitação, então a
+contagem está correta. Na prática, é uma evidência visual de que o servidor é
+mesmo concorrente.
+
+% =============================================================================
+% ITEM 7 - TELAS DE FUNCIONAMENTO
+% =============================================================================
+\section{Telas do funcionamento correto}
+
+Esta seção mostra o sistema em operação. As capturas seguem a mesma sequência do
+teste funcional descrito na seção anterior.
+
+\tela{01-servidor-iniciado.png}{Servidor recém-iniciado, mostrando \texttt{Servidor iniciado na porta 8080} e as conexões dos dois clientes.}{0.9}
+
+\tela{02-cliente-a-login-menu.png}{Cliente A conectado e autenticado, com o menu de operação.}{0.85}
+
+\tela{03-cliente-a-cadastro.png}{Cliente A cadastrando os usuários \texttt{10 - Abel} e \texttt{30 - Breno}.}{0.85}
+
+\tela{04-cliente-b-broadcast.png}{Cliente B recebendo a notificação de \textit{broadcast} sem ter pedido nada. Esta é a evidência visual do funcionamento em tempo real.}{0.85}
+
+\tela{05-ver-fila.png}{Opção \texttt{2}, com a fila completa entre o cabeçalho e o rodapé.}{0.85}
+
+\tela{06-heartbeat-novidade.png}{Opção \texttt{3} no cliente A: apenas os usuários cadastrados pelo cliente B.}{0.85}
+
+\tela{07-heartbeat-alive.png}{Opção \texttt{3} repetida, sem novidade desde a última verificação: resposta \texttt{ALIVE}.}{0.85}
+
+\tela{08-caso-de-erro.png}{Tratamento de erro: cadastro recusado por identificador inválido. A conexão permanece aberta.}{0.85}
+
+\tela{09-persistencia.png}{Conteúdo de \texttt{dados/fila.txt} e \texttt{dados/historico.txt}, gerados pelo servidor.}{0.9}
+
+% =============================================================================
+% ITEM 8 - CONCLUSAO E REFERENCIAS
+% =============================================================================
+\section{Conclusão}
+
+O sistema atende ao que o enunciado especifica. Cliente e servidor reproduzem as
+telas de exemplo ponta a ponta, o \textit{heartbeat} segue a Observação, a
+persistência grava os cinco tipos de dado pedidos e o servidor sustentou 10.000
+conexões simultâneas autenticadas sem nenhuma falha. O código final tem 1.326
+linhas em seis módulos e compila sem nenhum aviso.
+
+Mais interessante que o resultado, porém, é o caminho até ele. Quatro
+dificuldades marcaram o desenvolvimento.
+
+\vspace{6pt}
+\noindent\textbf{A delimitação de mensagens.} Nenhum dos códigos vistos em aula
+precisa resolver esse problema, porque cada um troca uma única mensagem por
+conexão. Aqui a conexão é persistente e carrega dezenas de mensagens, e o TCP
+não separa uma da outra. Foi preciso projetar do zero a convenção de uma linha
+por mensagem e o buffer que junta os pedaços recebidos. Esse foi o ponto do
+trabalho que mais exigiu leitura fora do material da disciplina.
+
+\vspace{6pt}
+\noindent\textbf{A escolha entre \texttt{fork()} e threads.} O \texttt{fork()} é
+a técnica mais detalhada em aula, e a primeira escolha natural. O problema
+apareceu ao pensar na fila: processos têm memória isolada, e compartilhar a fila
+exigiria comunicação entre processos, que não foi ensinada. As threads resolvem
+o compartilhamento sozinhas e cobram o \textit{mutex} em troca. Foi uma troca
+consciente, não uma preferência.
+
+\vspace{6pt}
+\noindent\textbf{O teste de 10.000 clientes não funcionou de primeira.} A
+primeira tentativa falhou por falta de memória. A causa levou algum tempo para
+aparecer: cada thread reserva 8~MB de pilha por padrão, o que daria 80~GB. A
+solução foi reduzir a pilha para 256~KB. Esse foi o momento em que ficou claro
+que ``suportar $N$ clientes'' depende de detalhes que não estão no código do
+protocolo.
+
+\vspace{6pt}
+\noindent\textbf{Dois defeitos apareceram nos próprios testes.} O primeiro: o
+nome era cortado ao entrar na fila, mas a confirmação e o histórico usavam o
+texto original, então o cliente recebia a confirmação de um nome diferente do
+que enviou. Passou a ser recusado em vez de cortado. O segundo: as conexões do
+teste de carga apareciam como falha de autenticação quando, na verdade,
+encerravam antes de tentar logar. São situações diferentes e passaram a ser
+registradas como tais. Nenhum dos dois teria sido encontrado sem os casos
+especiais.
+
+\vspace{6pt}
+\noindent\textbf{O código foi enxugado depois de funcionar.} Sete mecanismos que
+existiam por precaução, e não por necessidade, foram removidos após a primeira
+versão passar em todos os testes. O programa saiu de 1.545 para 1.326 linhas sem
+perder nenhuma funcionalidade, e a bateria de testes foi repetida por inteiro com
+resultados idênticos. O critério foi manter apenas o que o enunciado exige ou o
+que o protocolo precisa para funcionar.
+
+\vspace{6pt}
+\noindent\textbf{Uma ressalva sobre a retransmissão.} Sobre uma conexão TCP
+única, o reenvio de comandos é em boa parte redundante, porque o TCP já
+retransmite segmentos perdidos. O que de fato agrega valor é o número de
+sequência, que impede um comando repetido de cadastrar o mesmo usuário duas
+vezes. Reconhecer isso parece mais correto do que apresentar o mecanismo como
+indispensável.
+
+O trabalho deixa caminhos abertos. Ler o endereço do servidor de um arquivo de
+configuração, em vez de recompilar, é a melhoria mais imediata. Substituir o
+vetor fixo por uma estrutura dinâmica removeria o limite de 20.000 registros. E
+migrar de uma thread por conexão para multiplexação com \texttt{select()}
+reduziria o custo por cliente, ao preço de um código bem mais complexo.
+
+% =============================================================================
+% REFERENCIAS
+% =============================================================================
+\section*{Referências bibliográficas}
+\addcontentsline{toc}{section}{Referências bibliográficas}
+
+\begin{thebibliography}{9}
+\raggedright
+
+\bibitem{make}
+FREE SOFTWARE FOUNDATION. \textit{GNU Make Manual}. Disponível em:
+\url{http://www.gnu.org/software/make/manual/make.html}. Acesso em: 28 jul.
+2026.
+
+\bibitem{maketutor}
+COLBY COLLEGE. \textit{Makefile Tutorial}. Disponível em:
+\url{http://www.cs.colby.edu/maxwell/courses/tutorials/maketutor/}. Acesso em:
+28 jul. 2026.
+
+\bibitem{manpages}
+THE LINUX MAN-PAGES PROJECT. \textit{Linux Programmer's Manual}. Páginas
+consultadas: \texttt{socket(2)}, \texttt{bind(2)}, \texttt{listen(2)},
+\texttt{accept(2)}, \texttt{send(2)}, \texttt{recv(2)},
+\texttt{setsockopt(2)}, \texttt{pthread\_create(3)},
+\texttt{pthread\_mutex\_init(3)}, \texttt{pthread\_cond\_timedwait(3)},
+\texttt{pthread\_attr\_setstacksize(3)}, \texttt{sscanf(3)}. Disponível em:
+\url{https://man7.org/linux/man-pages/}. Acesso em: 28 jul. 2026.
+
+\bibitem{aula}
+FERREIRA, Rubens Barbosa. \textit{Códigos de exemplo da disciplina de Redes de
+Computadores}: \texttt{bind.c}, \texttt{escrevendo.c}, \texttt{fork.c},
+\texttt{multithread.c}, \texttt{porta.c}, \texttt{redes.c}. Dourados:
+Universidade Estadual de Mato Grosso do Sul, 2026.
+
+% ==================================================================
+% [CONFERIR - Victor]
+% Duas coisas nesta lista dependem de voce:
+%
+% 1. O nome completo do professor na referencia [4]. Coloquei
+%    "Rubens Barbosa Ferreira" como suposicao a partir do usuario
+%    "rubensbf" que aparece nos prints do enunciado. CONFIRME o nome
+%    correto antes de entregar - nome errado em referencia e pior que
+%    referencia ausente.
+%
+% 2. Se voce consultou algum livro (Tanenbaum, Kurose, Stevens) ou
+%    algum slide da disciplina durante o desenvolvimento, acrescente
+%    aqui. Se NAO consultou, nao invente: a lista acima ja cobre as
+%    fontes que o enunciado pede e as que o codigo realmente usou.
+% ==================================================================
+
+\end{thebibliography}
+
+% =============================================================================
+% MARCOS PENDENTES NESTE DOCUMENTO
+%
+% [A ESCREVER - Victor] Capturas de tela. Coloque os arquivos em figuras/
+% com os nomes abaixo. Enquanto nao existirem, o PDF compila e mostra uma
+% moldura no lugar de cada um.
+%
+%   figuras/01-servidor-iniciado.png
+%   figuras/02-cliente-a-login-menu.png
+%   figuras/03-cliente-a-cadastro.png
+%   figuras/04-cliente-b-broadcast.png
+%   figuras/05-ver-fila.png
+%   figuras/06-heartbeat-novidade.png
+%   figuras/07-heartbeat-alive.png
+%   figuras/08-caso-de-erro.png
+%   figuras/09-persistencia.png
+%   figuras/carga-100.png
+%   figuras/carga-1000.png
+%   figuras/carga-10000.png
+%
+% [CONFERIR - Victor] Referencia [4]: nome completo do professor.
+% =============================================================================
+
+\end{document}
