@@ -66,9 +66,11 @@ Saber contar este percurso responde metade das perguntas possíveis. Cenário: o
    saírem. *É este byte a byte que aparece no Wireshark.*
 4. **`servidor.c`, `atende_cliente`** — a thread daquele cliente está bloqueada em
    `protocolo_le_linha`, que acorda com a linha completa.
-5. **`protocolo_separa_comando`** — separa `ADD` do resto (`1 10 Abel`).
-6. **`servidor.c`, `trata_add`** — confere o número de sequência: é novo, então processa.
-   Trunca o nome para o limite, insere na fila.
+5. **`servidor.c`, `atende_cliente`** — `sscanf(linha, "%31s", comando)` pega a primeira
+   palavra (`ADD`) e chama o tratador correspondente, passando a linha inteira.
+6. **`servidor.c`, `trata_add`** — `sscanf(linha, "%*s %d %d %n", ...)` pula o comando, lê a
+   sequência e o identificador, e marca onde o nome começa. Valida (identificador positivo,
+   nome não vazio e dentro do limite), confere o número de sequência: é novo, então insere.
 7. **`fila.c`, `fila_adiciona`** — trava o mutex, copia o registro para a próxima posição
    livre, destrava. **Este é o único ponto onde a fila é modificada.**
 8. **`persistencia.c`** — grava a linha no histórico e reescreve o retrato da fila.

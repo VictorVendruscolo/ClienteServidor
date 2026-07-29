@@ -8,10 +8,15 @@ da documentação final. Escrito em 27/07/2026, revisado em 28/07 após a simpli
 
 ## 1. Situação
 
-**Versão 1 completa e testada.** Todas as funcionalidades F1–F11 de `docs/02_atividades.md`
-estão implementadas. O código compila com `gcc -Wall -Wextra` **sem nenhum aviso** e foi
-validado em teste funcional, 21 casos especiais, teste de retransmissão e teste de carga
-com 100, 1000 e 10000 clientes.
+**Versão final completa e testada.** Todas as funcionalidades F1–F11 de
+`docs/02_atividades.md` estão implementadas. O código compila **sem nenhum aviso** com
+`-Wall -Wextra` e também com o conjunto rigoroso (`-Wpedantic -Wshadow -Wconversion
+-Wsign-conversion -Wcast-align -Wnull-dereference`), em oito combinações de padrão C e
+otimização. Validado em teste funcional, **30 casos especiais**, teste de retransmissão e
+teste de carga com 100, 1000 e 10000 clientes — resultados completos em
+`docs/05_plano_testes.md`.
+
+**Tamanho final:** 1326 linhas de código (fora comentários), em 6 módulos.
 
 **Escopo:** robustez sobre as funcionalidades já especificadas — os prints são a base, não
 o teto. Isso significa validação de toda entrada, tratamento de erro em toda chamada de
@@ -115,8 +120,39 @@ pelo enunciado nem necessário para o protocolo funcionar.
 | `fila_destroi`, `sessoes_destroi`, `persistencia_fecha` | Simetria com as funções de inicialização | Ficaram órfãs ao sair o tratador de `SIGINT`; código que nunca executa foi removido |
 | Contador de respostas a descartar, no cliente | Contar quantas cópias atrasadas ignorar | Substituído por uma regra de três linhas, com o mesmo efeito: ignora-se qualquer resposta que chegue sem haver comando esperando |
 
-Saldo: **1545 → 1427 linhas de código** (fora comentários). A bateria de testes foi repetida
-por inteiro depois da simplificação, com resultados idênticos.
+Saldo desta etapa: **1545 → 1427 linhas de código**. A bateria de testes foi repetida por
+inteiro depois, com resultados idênticos.
+
+## 5.1 Segunda revisão: aproximar o código do nível da disciplina (28/07)
+
+Depois da simplificação acima, o código ainda usava construções de biblioteca que não
+correspondiam ao que a disciplina cobre. Foram trocadas por versões diretas, sem mudar o
+comportamento:
+
+| Removido | Substituído por | Motivo |
+|---|---|---|
+| `protocolo_envia_fmt` com `va_list` | `snprintf` no chamador | Era uma função variádica própria usada em um único lugar |
+| `protocolo_separa_comando` (com `toupper` e aritmética de ponteiro) | `sscanf(linha, "%*s %d ...")` | O `%*s` pula o comando e o `%n` marca onde o nome começa; resolve o mesmo com uma chamada de biblioteca padrão |
+| Tratamento de `EINTR` em `send`/`recv` | — | Só faz diferença se o processo receber sinais, o que não acontece aqui |
+| `strtol` com verificação de `errno` | `sscanf(entrada, "%d", &id)` | Validação mais simples, ao custo de uma limitação documentada (ver seção 7) |
+| `clock_gettime(CLOCK_REALTIME, ...)` | `time(NULL) + TIMEOUT_RESPOSTA_SEG` | `CLOCK_REALTIME` só existe quando a macro `_POSIX_C_SOURCE` está definida; com `-std=c99` ou `-std=c11` o programa deixaria de compilar. `time()` é C padrão puro e conta da mesma origem que o `pthread_cond_timedwait` espera |
+
+O leitor de linhas também foi simplificado: passou de dois índices (`inicio` e `fim`) para
+um contador único (`usados`), com o resto do buffer sempre deslocado para o começo depois
+de consumir uma linha.
+
+**`trata_heartbeat` unificado.** A função tinha dois mecanismos diferentes para repetir uma
+resposta: um texto guardado, quando a resposta anterior era `ALIVE`, e o recálculo do
+intervalo, quando era um bloco. Guardando sempre os dois marcadores, o recálculo cobre os
+dois casos sozinho — porque intervalo vazio já significa `ALIVE`. A função caiu de 32 para
+26 linhas e passou a ter um caminho só. Como consequência, o texto guardado passou a ser
+usado **apenas pelo `ADD`**, e foi renomeado para `ultima_resposta_add`.
+
+**Código morto removido:** `sessoes_conectadas` (nunca chamada) e a variável
+`total_conectadas` (incrementada e decrementada, mas nunca lida — o compilador não acusa,
+porque escrever conta como uso).
+
+Saldo final: **1427 → 1326 linhas de código.**
 
 ## 6. Consequência conhecida da regra do Heartbeat
 
@@ -132,23 +168,46 @@ porque esse mesmo registro já foi entregue ao cliente pela mensagem de broadcas
 imediata. A regra foi implementada exatamente como especificado; este parágrafo registra a
 consequência para o item 3 da documentação final.
 
+## 6.1 Duas pastas com o mesmo código
+
+O projeto mantém o código-fonte em dois lugares:
+
+- **`src/`** — versão de estudo, com comentários mais longos, usada para revisar o
+  funcionamento antes da apresentação;
+- **`ClienteServidor_Victor/`** — o que vai no zip, com comentários curtos e diretos.
+
+**O código é o mesmo nas duas.** Isso foi verificado comparando cada arquivo com os
+comentários e as linhas em branco descartados (`gcc -fpreprocessed -dD -E -P`): os doze
+fontes saíram idênticos, e o Makefile tem as mesmas regras. A pasta `ClienteServidor_Victor/` foi
+compilada e submetida à bateria completa de testes por conta própria.
+
+## 6.2 Limitação conhecida: estouro de inteiro no identificador
+
+A troca de `strtol` por `sscanf("%d")` deixou um comportamento que precisa ser declarado:
+um número acima do limite do tipo `int` sofre estouro silencioso e é gravado com outro
+valor. Testado: `99999999999999` entra na fila como `276447231`. Identificadores negativos
+e zero são recusados; o estouro produz um valor positivo, então passa pela validação.
+
+Corrigir exigiria voltar ao `strtol` com verificação de `errno`. Como é um comportamento
+comum em C e sem impacto no funcionamento do sistema, optou-se por registrar a limitação.
+
 ## 7. Testes realizados nesta fase
 
 Todos executados em Linux, com servidor e clientes na mesma máquina (`127.0.0.1`), e
 repetidos por inteiro após a simplificação da seção 5.
 
+Resultados detalhados, caso a caso, em **`docs/05_plano_testes.md`**. Resumo:
+
 | Teste | Resultado |
 |---|---|
-| Compilação com `-Wall -Wextra` | Sem nenhum aviso |
+| Compilação (`-Wall -Wextra`, conjunto rigoroso, 8 combinações de `-std` e `-O2`) | Nenhum aviso |
 | `make` sem parâmetros | Gera exatamente `cliente` e `servidor` |
-| Sequência dos prints do enunciado, com 2 clientes | Reproduzida: login, menu, `ADD`, `LIST`, broadcast e heartbeat conferem |
-| **21 casos especiais** | 21 de 21 aprovados (credencial errada, comando antes do login, comando desconhecido, `ADD` malformado, id não numérico, sem nome, sequência inválida/zero/fora de ordem, nome com espaços, nome acima do limite, fila vazia, queda abrupta de cliente) |
-| **Reenvio de `ADD` com o mesmo `seq`** | Servidor repete a resposta e **não** insere de novo |
-| **Reenvio de `HEARTBEAT` com o mesmo `seq`** | Devolve exatamente o mesmo bloco de antes |
-| **Retransmissão vista do lado do cliente** | 3 tentativas a cada 3 s, sempre com o mesmo `seq`; aviso ao operador; respostas atrasadas descartadas; comando seguinte funciona normalmente |
-| **Carga de 100, 1000 e 10000 clientes** | **0 falhas**; cada conexão numerada individualmente |
-| **Carga de 10000 clientes autenticados** | 10000 sessões simultâneas, 10000 logins gravados, 0 falhas |
-| Total acumulado numa só execução do servidor | **21100 conexões, 0 erros de `accept`**; servidor segue operando normalmente depois |
+| Sequência das telas do enunciado, com 2 clientes | Reproduzida: login, menu, `ADD`, `LIST`, broadcast e heartbeat conferem |
+| **30 casos especiais** | 30 de 30 aprovados |
+| **Reenvio de `ADD` com o mesmo `seq`** | Repete a resposta e **não** insere de novo |
+| **Reenvio de `HEARTBEAT` com o mesmo `seq`** | Devolve exatamente o mesmo bloco |
+| **Retransmissão vista do cliente** | 3 envios a cada 3 s, sempre com o mesmo `seq`; aviso ao operador; respostas atrasadas descartadas; comando seguinte normal |
+| **Carga de 100, 1000 e 10000 clientes** | 0 falhas; servidor reiniciado antes de cada teste, numeração de `[#1]` a `[#N]`; todas as conexões autenticadas |
 | Persistência | Os quatro arquivos gerados e consistentes com as operações |
 
 ## 8. Pendências para as fases seguintes

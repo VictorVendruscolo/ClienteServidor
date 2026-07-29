@@ -96,9 +96,20 @@ typedef struct {
   pela simplicidade de implementar/testar no tempo que resta; 20000 cobre com folga o teste de
   carga de 10000 clientes mesmo que cada um adicione mais de um usuário. Documentar essa
   limitação (tamanho máximo) no item 3 da documentação.
-- **ID e nome:** `id` é `int` livre, digitado pelo operador — **sem validação de unicidade**
-  na v1 (nada no enunciado exige IDs únicos; os prints usam valores distintos, mas por escolha
-  de quem testou, não por regra do sistema). `nome` limitado a **50 bytes** (`char nome[50]`).
+- **ID e nome:** `id` é `int`, digitado pelo operador — **sem validação de unicidade** (nada
+  no enunciado exige IDs únicos; os prints usam valores distintos, mas por escolha de quem
+  testou, não por regra do sistema). `nome` limitado a **50 bytes** (`char nome[50]`).
+
+  > **Atualização de 28/07 (o que o código faz hoje).** Duas regras foram acrescentadas
+  > durante os testes, e valem tanto no cliente quanto no servidor:
+  >
+  > - **identificador precisa ser positivo.** Valores negativos e zero são recusados com
+  >   `ERRO O identificador deve ser um numero positivo`. *Limitação conhecida:* um número
+  >   acima do limite do `int` sofre estouro silencioso no `sscanf` e entra com outro valor.
+  > - **nome acima do limite é recusado, não cortado**, com `ERRO Nome invalido, vazio ou
+  >   longo demais`. Cortar traria dois problemas: o cliente receberia a confirmação de um
+  >   nome diferente do que enviou, e o corte em 49 bytes poderia cair no meio de um
+  >   caractere acentuado, que ocupa dois bytes. Nomes com acento são aceitos normalmente.
 - **Por thread/cliente**: uma variável local `int ultimo_indice_visto`, guardada desde o
   `LOGIN` (= tamanho da fila naquele momento). O `HEARTBEAT` compara esse valor com o tamanho
   atual da fila: se maior, devolve os usuários entre esses índices e atualiza o valor; senão,
@@ -169,7 +180,8 @@ Todos os pontos em aberto da primeira versão foram decididos:
 5. Servidor **sempre começa com a fila vazia**, não recarrega `fila.txt` — seção 7.
 6. Delimitação de mensagens: texto ASCII, uma linha terminada em `\n`, com formato de
    cabeçalho/rodapé fixo para respostas de múltiplas linhas — seção 2.
-7. `nome` limitado a 50 bytes; `id` livre, sem checagem de unicidade — seção 5.
+7. `nome` limitado a 50 bytes e **recusado** se ultrapassar; `id` precisa ser positivo, mas
+   sem checagem de unicidade — seção 5.
 
 **Sem pendências bloqueantes.** Próximo passo: `docs/03_especificacao.md` (juntar isso com as
 decisões de arquitetura — threads, mutex, estrutura de arquivos) e então a Fase 4

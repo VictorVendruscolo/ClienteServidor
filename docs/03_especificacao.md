@@ -54,7 +54,9 @@ pthread_mutex_t fila_mutex;       // protege fila[] e fila_tamanho em todo acess
 - Cada thread de cliente guarda localmente `int ultimo_indice_visto`, para o `HEARTBEAT`
   devolver só os usuários adicionados por outros desde a última checagem (detalhe da
   atualização própria ao fazer `ADD` — ver `docs/03_protocolo.md`, seção 5).
-- `id`: `int` livre, sem checagem de unicidade. `nome`: até 50 bytes.
+- `id`: `int` que precisa ser **positivo** (negativo e zero são recusados), sem checagem de
+  unicidade. `nome`: até 49 caracteres — acima disso o cadastro é **recusado**, não cortado.
+  Ver a atualização de 28/07 em `docs/03_protocolo.md`, seção 5.
 
 ## 4. Protocolo de mensagens
 

@@ -8,16 +8,16 @@
 src/cliente
 src/servidor
 src/carga
-entrega/cliente
-entrega/servidor
-entrega/carga
+ClienteServidor_Victor/cliente
+ClienteServidor_Victor/servidor
+ClienteServidor_Victor/carga
 
 # Arquivos objeto
 *.o
 
 # Dados gerados durante a execucao do servidor
 src/dados/
-entrega/dados/
+ClienteServidor_Victor/dados/
 
 # Configuracao local de ferramentas
 .claude/

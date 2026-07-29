@@ -17,7 +17,7 @@ Cliente-Servidor em C · UEMS · Prof. Rubens · Aluno: Victor Vendruscolo
 | **Data de hoje** | 28/07/2026 |
 | **Entrega e apresentação** | **29/07/2026** |
 | **Dias restantes** | 1 dia |
-| **Fase atual** | Fases 1 a 4 concluídas — **versão 1 do código implementada e testada** (`src/`, ver `docs/04_implementacao.md`) → seguindo para validação em rede real (Fase 5) |
+| **Fase atual** | **Código fechado e pasta de entrega pronta** (`ClienteServidor_Victor/`, 14 arquivos). Restam: trocar `SERVER_IP`, capturar as telas dos itens 6 e 7, e escrever o PDF da documentação — material reunido em `docs/08_material_para_o_pdf.md` |
 | **Escopo definido** | **Tudo do enunciado é obrigatório.** Armazenamento: é preciso escolher banco de dados **ou** arquivo (não dá pra pular os dois) — **optamos por arquivo `.txt`**, por ser mais básico (confirmado em aula, seção 0.1). |
 | **Técnica de concorrência** | **DECIDIDO: threads (`pthreads`)** — ver Registro de Decisões, seção 6 |
 | **Terminologia do domínio** | O print usa "paciente"; **nosso sistema usa "usuário"** (o texto do enunciado já usa esse termo). Ver seção 0.1. |
@@ -70,9 +70,10 @@ As fases seguem uma progressão: entender → especificar → construir → vali
 | 2 | Destrinchar o enunciado em atividades | `docs/02_atividades.md` | ✅ Concluída (27/07, revisada 2x) |
 | 3 | Estudar soluções e decidir o caminho | `docs/03_especificacao.md` + `docs/03_protocolo.md` | ✅ Concluída (27/07) |
 | 4 | Implementar cliente e servidor | `src/` + `Makefile` + `docs/04_implementacao.md` | ✅ Concluída (27/07) |
-| 5 | Testar e validar | `docs/05_plano_testes.md` + `testes/` | ⬜ A fazer |
+| 5 | Testar e validar | `docs/05_plano_testes.md` | 🟡 Testes locais concluídos (30/30 e carga 100/1000/10000); faltam os testes em duas máquinas, as capturas de tela e o Wireshark |
 | 6 | Estudar a fundo o código final | `docs/06_estudo_aprofundado.md` | 🟡 Guia de defesa escrito (28/07); falta conclusão e referências |
-| — | Documentação final + entrega | `docs/documentacao.pdf` + `readme.txt` + `.zip` | ⬜ A fazer |
+| — | Pasta de entrega | `ClienteServidor_Victor/` (14 arquivos, comentários enxutos) | ✅ Pronta (28/07) — falta trocar `SERVER_IP` |
+| — | Documentação final + entrega | `docs/documentacao.pdf` + `.zip` | ⬜ A fazer — material reunido em `docs/08_material_para_o_pdf.md` |
 | — | Estudo teórico dos códigos de aula (7 arquivos) | `docs/00_estudo_codigos_aula.md` | ✅ Concluído (27/07) |
 
 Legenda de status: ⬜ a fazer · 🟡 em andamento · ✅ concluída · ⛔ bloqueada
@@ -356,7 +357,15 @@ Toda decisão técnica relevante fica aqui, com data e motivo. Serve para a docu
 
 ---
 
-*Atualização de 28/07/2026 — **passe de simplificação**: sete mecanismos removidos do código
+*Fechamento de 28/07/2026 — código final com **1326 linhas** (de 1545 iniciais), aprovado em
+30 de 30 casos especiais e no teste de carga de 100/1000/10000 clientes, sem nenhum aviso de
+compilação. Criada a pasta **`ClienteServidor_Victor/`** com os 14 arquivos do zip: mesmo código de `src/`
+(comparação sem comentários confirma que são idênticos), com comentários mais curtos. Novos
+documentos: `05_plano_testes.md` (todos os testes com resultados), `07_rastreabilidade.md`
+(enunciado → código, com o escopo declarado) e `08_material_para_o_pdf.md` (índice para a
+redação da documentação). Pendências: trocar `SERVER_IP`, capturar as telas e escrever o PDF.*
+
+*Atualização anterior de 28/07/2026 — **passe de simplificação**: sete mecanismos removidos do código
 (rwlock, `SO_SNDTIMEO`, tratamento de `EMFILE`, `setrlimit`, tratador de `SIGINT`, funções de
 limpeza órfãs e o contador de descarte no cliente), −118 linhas, com toda a bateria de testes
 repetida e resultados idênticos. Motivo: reduzir a carga conceitual para a defesa oral — as
