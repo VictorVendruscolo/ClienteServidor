@@ -6,7 +6,7 @@ Universidade Estadual de Mato Grosso do Sul - Ciencia da Computacao
 
 ALUNO
 -----
-Victor Vendruscolo
+Victor Rech Vendruscolo
 
 
 COMPILACAO
@@ -27,10 +27,6 @@ EXECUCAO
 2) Em cada maquina cliente (uma execucao por cliente):
 
     ./cliente
-
-Nenhum dos dois programas recebe parametros. O cliente descobre
-automaticamente o endereco e a porta do servidor a partir das constantes
-SERVER_IP e SERVER_PORTA definidas no arquivo comum.h.
 
 
 CONFIGURACAO DO ENDERECO DO SERVIDOR

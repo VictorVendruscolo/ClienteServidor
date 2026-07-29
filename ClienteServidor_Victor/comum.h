@@ -1,31 +1,14 @@
 /*
- * comum.h - Constantes, tipo Usuario e textos do protocolo.
- *
  * Trabalho de Redes de Computadores - UEMS
  * Plataforma de Monitoramento Inteligente de Filas em Tempo Real
- * Aluno: Victor Vendruscolo
- *
- * Cliente e servidor incluem este mesmo arquivo, para os dois lados usarem
- * exatamente os mesmos valores e os mesmos textos de mensagem.
- */
+ * Aluno: Victor Rech Vendruscolo
+*/
 
 #ifndef COMUM_H
 #define COMUM_H
 
-/*
- * ENDERECO DO SERVIDOR
- *
- * Esta e a unica linha que precisa ser alterada para rodar o servidor e os
- * clientes em maquinas diferentes na mesma rede:
- *
- *   1. na maquina do servidor, rode:  hostname -I
- *   2. troque o valor abaixo pelo IP mostrado
- *   3. recompile com:  make
- *
- * O valor 127.0.0.1 permite testar tudo em uma maquina so.
- */
+/* ENDERECO DO SERVIDOR */
 #define SERVER_IP "127.0.0.1"
-
 /* Porta do servidor. */
 #define SERVER_PORTA 8080
 
@@ -54,11 +37,6 @@
 /* Quantas vezes o mesmo comando pode ser enviado (1 original + 2 reenvios). */
 #define MAX_TENTATIVAS 3
 
-/*
- * Um usuario da fila de atendimento.
- * O enunciado usa "paciente" nos prints e "usuario" no texto; adotei
- * "usuario". Nao confundir com "cliente", que e o programa ./cliente.
- */
 typedef struct {
     int  id;               /* identificador digitado pelo operador */
     char nome[TAM_NOME];   /* nome, terminado em '\0'              */
@@ -82,10 +60,7 @@ typedef struct {
 #define FILA_CABECALHO "===== FILA ====="
 #define FILA_RODAPE    "================"
 
-/*
- * Mensagem de broadcast. O texto trafega sem acento, em ASCII puro, para os
- * bytes serem iguais em qualquer maquina; o cliente acentua ao exibir.
- */
+/* Mensagem de broadcast. */
 #define PREFIXO_BROADCAST  "[Broadcast]"
 #define BROADCAST_NOVO_USUARIO "[Broadcast] Novo usuario: "
 

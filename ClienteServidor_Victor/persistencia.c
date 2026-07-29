@@ -1,9 +1,3 @@
-/*
- * persistencia.c - Implementacao da gravacao em arquivo (ver persistencia.h).
- *
- * Trabalho de Redes de Computadores - UEMS
- * Aluno: Victor Vendruscolo
- */
 
 #include <stdio.h>
 #include <stdarg.h>

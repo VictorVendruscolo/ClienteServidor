@@ -1,9 +1,3 @@
-/*
- * protocolo.c - Implementacao do envio e da leitura de linhas.
- *
- * Trabalho de Redes de Computadores - UEMS
- * Aluno: Victor Vendruscolo
- */
 
 #include <stdio.h>
 #include <string.h>
