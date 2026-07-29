@@ -6,7 +6,7 @@
 
 #include "protocolo.h"
 
-// envio completo: send pode aceitar menos
+// envio completo
 static int envia_todos(int sock, const char *dados, size_t total)
 {
     size_t enviados = 0;
@@ -22,68 +22,38 @@ static int envia_todos(int sock, const char *dados, size_t total)
     return 0;
 }
 
-// prepara o leitor
-void protocolo_leitor_init(LeitorLinha *leitor, int sock)
+// leitura byte a byte
+int protocolo_le_linha(int sock, char *destino, size_t tam)
 {
-    leitor->sock   = sock;
-    leitor->usados = 0;
-}
+    size_t usados = 0;
+    char   c;
 
-// le ate o '\n', guardando o que sobrar
-int protocolo_le_linha(LeitorLinha *leitor, char *destino, size_t tam)
-{
     if (tam == 0) {
         return LINHA_ERRO;
     }
 
     for (;;) {
-        size_t  i;
-        ssize_t n;
-
-        // procura '\n' no que ja esta no buffer
-        for (i = 0; i < leitor->usados; i++) {
-            if (leitor->buffer[i] != '\n') {
-                continue;
-            }
-
-            if (i >= tam) {
-                return LINHA_ERRO;
-            }
-
-            memcpy(destino, leitor->buffer, i);
-            destino[i] = '\0';
-
-            // sobra volta para o inicio do buffer
-            leitor->usados = leitor->usados - (i + 1);
-            memmove(leitor->buffer, leitor->buffer + i + 1, leitor->usados);
-
-            if (i > 0 && destino[i - 1] == '\r') {
-                destino[i - 1] = '\0';          // aceita "\r\n"
-            }
-            return LINHA_OK;
-        }
-
-        if (leitor->usados == sizeof(leitor->buffer)) {
-            return LINHA_ERRO;                  // buffer cheio sem '\n'
-        }
-
-        // le mais no espaco que sobrou
-        n = recv(leitor->sock,
-                 leitor->buffer + leitor->usados,
-                 sizeof(leitor->buffer) - leitor->usados,
-                 0);
+        ssize_t n = recv(sock, &c, 1, 0);
 
         if (n == 0) {
-            return LINHA_FECHADA;               // outro lado fechou
+            return LINHA_FECHADA;
         }
         if (n < 0) {
             return LINHA_ERRO;
         }
-        leitor->usados += (size_t) n;
+        if (c == '\n') {
+            destino[usados] = '\0';
+            return LINHA_OK;
+        }
+        if (usados + 1 >= tam) {
+            return LINHA_ERRO;
+        }
+        destino[usados] = c;
+        usados++;
     }
 }
 
-// envia com '\n'
+// envio com terminador
 int protocolo_envia_linha(int sock, const char *linha)
 {
     if (envia_todos(sock, linha, strlen(linha)) != 0) {
@@ -92,7 +62,7 @@ int protocolo_envia_linha(int sock, const char *linha)
     return envia_todos(sock, "\n", 1);
 }
 
-// remove espacos das pontas
+// espacos das pontas
 void protocolo_limpa_bordas(char *texto)
 {
     size_t inicio = 0;

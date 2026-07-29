@@ -11,7 +11,6 @@
 #include "comum.h"
 #include "fila.h"
 
-// arquivos de dados
 #define DIR_DADOS       "dados"
 #define ARQ_SERVIDOR    "dados/servidor.log"
 #define ARQ_SESSOES     "dados/sessoes.log"
@@ -20,30 +19,30 @@
 
 #define LOTE_GRAVACAO 64
 
-// arquivos abertos na execucao
+// abertos o tempo todo, por causa da carga
 static FILE *arq_servidor  = NULL;
 static FILE *arq_sessoes   = NULL;
 static FILE *arq_historico = NULL;
 
 static pthread_mutex_t mutex_dados = PTHREAD_MUTEX_INITIALIZER;
 
-// data e hora
+// data e hora atuais
 static void agora_texto(char *destino, size_t tam)
 {
     time_t    agora = time(NULL);
     struct tm quebrado;
 
-    if (localtime_r(&agora, &quebrado) == NULL) {
+    if (localtime_r(&agora, &quebrado) == NULL) {   // localtime_r: seguro com threads
         snprintf(destino, tam, "0000-00-00 00:00:00");
         return;
     }
     strftime(destino, tam, "%Y-%m-%d %H:%M:%S", &quebrado);
 }
 
-// criacao do diretorio e abertura
+// cria dados/ e abre os arquivos
 int persistencia_init(void)
 {
-    if (mkdir(DIR_DADOS, 0755) != 0 && errno != EEXIST) {
+    if (mkdir(DIR_DADOS, 0755) != 0 && errno != EEXIST) {   // EEXIST nao e erro
         perror("Erro ao criar o diretorio dados/");
         return -1;
     }
@@ -59,7 +58,7 @@ int persistencia_init(void)
     return 0;
 }
 
-// log do servidor
+// evento do servidor: tela e arquivo
 void persistencia_log_servidor(const char *formato, ...)
 {
     char    mensagem[TAM_LINHA];
@@ -74,7 +73,7 @@ void persistencia_log_servidor(const char *formato, ...)
 
     pthread_mutex_lock(&mutex_dados);
 
-    printf("%s\n", mensagem);
+    printf("%s\n", mensagem);               // tela do servidor
     fflush(stdout);
 
     if (arq_servidor != NULL) {
@@ -85,7 +84,7 @@ void persistencia_log_servidor(const char *formato, ...)
     pthread_mutex_unlock(&mutex_dados);
 }
 
-// log de sessao
+// LOGIN ou LOGOUT
 void persistencia_log_sessao(const char *evento, const char *ip)
 {
     char instante[32];
@@ -103,7 +102,7 @@ void persistencia_log_sessao(const char *evento, const char *ip)
     pthread_mutex_unlock(&mutex_dados);
 }
 
-// historico
+// registro permanente das insercoes
 void persistencia_historico_add(int id, const char *nome)
 {
     char instante[32];
@@ -118,7 +117,7 @@ void persistencia_historico_add(int id, const char *nome)
     pthread_mutex_unlock(&mutex_dados);
 }
 
-// retrato da fila
+// retrato da fila atual
 void persistencia_salva_fila(void)
 {
     Usuario lote[LOTE_GRAVACAO];
@@ -128,7 +127,7 @@ void persistencia_salva_fila(void)
 
     pthread_mutex_lock(&mutex_dados);
 
-    arquivo = fopen(ARQ_FILA, "w");
+    arquivo = fopen(ARQ_FILA, "w");         // "w": reescreve inteiro
     if (arquivo == NULL) {
         pthread_mutex_unlock(&mutex_dados);
         return;
@@ -136,7 +135,7 @@ void persistencia_salva_fila(void)
 
     fprintf(arquivo, "%s\n", FILA_CABECALHO);
 
-    // gravacao em lotes
+    // em lotes, para nao prender o mutex da fila
     do {
         int i;
 

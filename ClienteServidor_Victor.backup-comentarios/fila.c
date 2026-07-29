@@ -3,16 +3,15 @@
 
 #include "fila.h"
 
-// fila compartilhada
+// static: acesso so pelas funcoes com mutex
 static Usuario         fila[MAX_USUARIOS_FILA];
 static int             quantidade = 0;
 static pthread_mutex_t fila_mutex;
 
-// inicializacao
+// inicializa fila e mutex
 int fila_init(void)
 {
     quantidade = 0;
-
     memset(fila, 0, sizeof(fila));
 
     if (pthread_mutex_init(&fila_mutex, NULL) != 0) {
@@ -21,12 +20,12 @@ int fila_init(void)
     return 0;
 }
 
-// insercao
+// insere no fim, devolve o indice
 int fila_adiciona(int id, const char *nome)
 {
     int indice;
 
-    pthread_mutex_lock(&fila_mutex);
+    pthread_mutex_lock(&fila_mutex);            // secao critica
 
     if (quantidade >= MAX_USUARIOS_FILA) {
         pthread_mutex_unlock(&fila_mutex);
@@ -36,7 +35,7 @@ int fila_adiciona(int id, const char *nome)
     indice = quantidade;
     fila[indice].id = id;
     strncpy(fila[indice].nome, nome, TAM_NOME - 1);
-    fila[indice].nome[TAM_NOME - 1] = '\0';
+    fila[indice].nome[TAM_NOME - 1] = '\0';     // strncpy nao garante o '\0'
     quantidade++;
 
     pthread_mutex_unlock(&fila_mutex);
@@ -55,7 +54,7 @@ int fila_tamanho(void)
     return total;
 }
 
-// copia de intervalo
+// copia trecho sob mutex
 int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max)
 {
     int copiados = 0;

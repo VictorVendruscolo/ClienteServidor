@@ -3,19 +3,20 @@
 
 #include "comum.h"
 
-// fila compartilhada, protegida por mutex
+// fila compartilhada, mutex interno
+
 #define FILA_CHEIA (-1)
 
-// inicializacao
+// inicializa fila e mutex
 int fila_init(void);
 
-// insercao
+// insere no fim, devolve o indice
 int fila_adiciona(int id, const char *nome);
 
-// tamanho
+// tamanho atual
 int fila_tamanho(void);
 
-// copia de intervalo
+// copia [inicio, fim), devolve quantos copiou
 int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max);
 
 #endif

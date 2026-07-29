@@ -13,14 +13,15 @@
 #include "comum.h"
 #include "protocolo.h"
 
-// duas threads: teclado e socket
-// operacao aguardada
+// duas threads: socket e teclado
+
+// operacoes
 #define AGUARDA_NADA      0
 #define AGUARDA_ADD       1
 #define AGUARDA_LIST      2
 #define AGUARDA_HEARTBEAT 3
 
-// canal entre as threads
+// ligacao entre as duas threads
 typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t  condicao;
@@ -42,7 +43,7 @@ static void marca_resposta_completa(void)
     pthread_cond_signal(&canal.condicao);
 }
 
-// formatacao da resposta
+// impressao da linha de acordo com comando
 static void imprime_resposta(int comando, const char *linha, int primeira_linha)
 {
     if (strncmp(linha, RESP_ADD_OK, strlen(RESP_ADD_OK)) == 0) {
@@ -50,6 +51,7 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
         int         id    = 0;
         int         deslocamento = 0;
 
+        // converte operador
         if (sscanf(resto, "%d %n", &id, &deslocamento) == 1 && deslocamento > 0) {
             printf("Usuário %s adicionado.\n", resto + deslocamento);
         } else {
@@ -86,15 +88,17 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
     printf("%s\n", linha);
 }
 
-// thread receptora
+// recv sem disputa de bytes
 static void *thread_receptora(void *argumento)
 {
-    char linha[TAM_LINHA];
+    LeitorLinha leitor;
+    char        linha[TAM_LINHA];
 
     (void) argumento;
+    protocolo_leitor_init(&leitor, socket_servidor);
 
     for (;;) {
-        int resultado = protocolo_le_linha(socket_servidor, linha, sizeof(linha));
+        int resultado = protocolo_le_linha(&leitor, linha, sizeof(linha));
 
         if (resultado != LINHA_OK) {
             pthread_mutex_lock(&canal.mutex);
@@ -104,6 +108,7 @@ static void *thread_receptora(void *argumento)
             break;
         }
 
+        // broadcast: chega sem pedir, acentua na exibicao
         if (strncmp(linha, BROADCAST_NOVO_USUARIO,
                     strlen(BROADCAST_NOVO_USUARIO)) == 0) {
             printf("[Broadcast] Novo usuário: %s\n",
@@ -119,7 +124,7 @@ static void *thread_receptora(void *argumento)
 
         pthread_mutex_lock(&canal.mutex);
 
-        // maquina de estados do bloco
+        // sem comando esperando = copia atrasada, ignora
         if (!canal.dentro_do_bloco) {
             if (strcmp(linha, FILA_CABECALHO) == 0) {
                 canal.dentro_do_bloco = 1;
@@ -149,7 +154,7 @@ static void *thread_receptora(void *argumento)
     return NULL;
 }
 
-// envio com reenvio
+// envio com reenvio: mesmo texto, mesma sequencia
 static int envia_comando(const char *comando_texto, int tipo)
 {
     int envios = 0;
@@ -176,11 +181,9 @@ static int envia_comando(const char *comando_texto, int tipo)
         }
 
         {
-
-            // espera com tempo limite
             struct timespec limite;
 
-            limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;
+            limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;   // instante absoluto
             limite.tv_nsec = 0;
 
             pthread_mutex_lock(&canal.mutex);
@@ -197,7 +200,7 @@ static int envia_comando(const char *comando_texto, int tipo)
     }
 
     pthread_mutex_lock(&canal.mutex);
-    canal.aguardando = AGUARDA_NADA;
+    canal.aguardando = AGUARDA_NADA;        // copia atrasada sera ignorada
     pthread_mutex_unlock(&canal.mutex);
 
     if (caiu) {
@@ -210,13 +213,13 @@ static int envia_comando(const char *comando_texto, int tipo)
 static int le_teclado(char *destino, size_t tam)
 {
     if (fgets(destino, (int) tam, stdin) == NULL) {
-        return 0;
+        return 0;                           // Ctrl+D
     }
     protocolo_limpa_bordas(destino);
     return 1;
 }
 
-// validacao do nome
+// valida o nome
 static int nome_valido(const char *nome)
 {
     int i;
@@ -227,13 +230,13 @@ static int nome_valido(const char *nome)
     for (i = 0; nome[i] != '\0'; i++) {
         unsigned char c = (unsigned char) nome[i];
         if (c < 32 || c == 127) {
-            return 0;
+            return 0;                       // controle quebraria a linha
         }
     }
     return 1;
 }
 
-// opcao 1
+// opcao 1: adicionar usuario
 static int opcao_adicionar_usuario(int sequencia)
 {
     char entrada[TAM_LINHA];
@@ -265,7 +268,7 @@ static int opcao_adicionar_usuario(int sequencia)
         return 0;
     }
 
-    strcpy(nome, entrada);
+    strcpy(nome, entrada);                  // tamanho ja conferido
 
     snprintf(comando, sizeof(comando), "%s %d %d %s",
              CMD_ADD, sequencia, id, nome);
@@ -277,7 +280,7 @@ static int opcao_adicionar_usuario(int sequencia)
     }
 }
 
-// opcao 2
+// opcao 2: ver fila
 static int opcao_ver_fila(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -291,7 +294,7 @@ static int opcao_ver_fila(int sequencia)
     }
 }
 
-// opcao 3
+// opcao 3: heartbeat
 static int opcao_heartbeat(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -316,7 +319,7 @@ static void mostra_menu(void)
     fflush(stdout);
 }
 
-// conexao
+// conexao TCP
 static int conecta_ao_servidor(void)
 {
     struct sockaddr_in endereco;
@@ -331,6 +334,7 @@ static int conecta_ao_servidor(void)
     endereco.sin_family = AF_INET;
     endereco.sin_port   = htons(SERVER_PORTA);
 
+    // inet_pton: texto para binario
     if (inet_pton(AF_INET, SERVER_IP, &endereco.sin_addr) <= 0) {
         fprintf(stderr, "Endereço IP inválido em SERVER_IP: %s\n", SERVER_IP);
         close(socket_servidor);
@@ -353,8 +357,11 @@ static int conecta_ao_servidor(void)
 // login automatico
 static int autentica(void)
 {
+    LeitorLinha leitor;
     char        resposta[TAM_LINHA];
     char        comando[TAM_LINHA];
+
+    protocolo_leitor_init(&leitor, socket_servidor);
 
     snprintf(comando, sizeof(comando), "%s %s %s",
              CMD_LOGIN, LOGIN_USUARIO, LOGIN_SENHA);
@@ -364,7 +371,7 @@ static int autentica(void)
         return -1;
     }
 
-    if (protocolo_le_linha(socket_servidor, resposta, sizeof(resposta)) != LINHA_OK) {
+    if (protocolo_le_linha(&leitor, resposta, sizeof(resposta)) != LINHA_OK) {
         fprintf(stderr, "O servidor encerrou a conexão durante a autenticação.\n");
         return -1;
     }
@@ -382,10 +389,10 @@ static int autentica(void)
 int main(void)
 {
     pthread_t receptora;
-    int       sequencia = 0;
+    int       sequencia = 0;    // numera os comandos desta conexao
     int       encerrar  = 0;
 
-    signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);   // escrever em socket fechado mataria o processo
 
     if (conecta_ao_servidor() != 0) {
         return 1;
@@ -397,6 +404,7 @@ int main(void)
         return 1;
     }
 
+    // canal entre as threads
     memset(&canal, 0, sizeof(canal));
     canal.conexao_ativa = 1;
     canal.aguardando    = AGUARDA_NADA;
@@ -409,7 +417,7 @@ int main(void)
         return 1;
     }
 
-    // laco do menu
+    // menu
     while (!encerrar) {
         char entrada[TAM_LINHA];
         int  resultado = 0;
@@ -453,9 +461,10 @@ int main(void)
         }
     }
 
+    // encerramento
     (void) protocolo_envia_linha(socket_servidor, CMD_SAIR);
 
-    shutdown(socket_servidor, SHUT_RDWR);
+    shutdown(socket_servidor, SHUT_RDWR);   // faz a receptora sair do recv
     pthread_join(receptora, NULL);
     close(socket_servidor);
 

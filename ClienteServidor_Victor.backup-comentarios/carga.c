@@ -11,7 +11,9 @@
 #include "comum.h"
 #include "protocolo.h"
 
-// gerador de clientes para o teste de carga
+// teste de carga: ./carga <quantidade>
+// antes de muitos clientes: ulimit -n 20000
+
 #define INTERVALO_RELATORIO 100
 
 // conexao
@@ -45,6 +47,7 @@ static int conecta(void)
 // login
 static int autentica(int sock)
 {
+    LeitorLinha leitor;
     char        comando[TAM_LINHA];
     char        resposta[TAM_LINHA];
 
@@ -55,7 +58,8 @@ static int autentica(int sock)
         return 0;
     }
 
-    if (protocolo_le_linha(sock, resposta, sizeof(resposta)) != LINHA_OK) {
+    protocolo_leitor_init(&leitor, sock);
+    if (protocolo_le_linha(&leitor, resposta, sizeof(resposta)) != LINHA_OK) {
         return 0;
     }
 
@@ -94,6 +98,7 @@ int main(int argc, char *argv[])
 
     printf("Abrindo %d conexoes em %s:%d\n\n", quantidade, SERVER_IP, SERVER_PORTA);
 
+    // abre e autentica cada cliente
     for (i = 0; i < quantidade; i++) {
         int sock = conecta();
 
@@ -109,7 +114,7 @@ int main(int argc, char *argv[])
         } else {
             falhas++;
             if (falhas == 1) {
-
+                // em geral: descritores ou servidor fora
                 printf("Primeira falha na conexao %d: %s\n", i + 1, strerror(errno));
             }
         }
@@ -120,13 +125,14 @@ int main(int argc, char *argv[])
         }
     }
 
+    // mantem abertas: N clientes simultaneos
     printf("\nResultado: %d conexoes abertas, %d falhas.\n", abertos, falhas);
     printf("As %d conexoes permanecem ativas simultaneamente.\n", abertos);
     printf("Pressione ENTER para encerra-las...");
     fflush(stdout);
 
     if (fgets(tecla, sizeof(tecla), stdin) == NULL) {
-
+        // entrada encerrada, fecha assim mesmo
     }
 
     for (i = 0; i < quantidade; i++) {
