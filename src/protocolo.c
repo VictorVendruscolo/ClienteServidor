@@ -93,8 +93,17 @@ int protocolo_le_linha(LeitorLinha *leitor, char *destino, size_t tam)
                  sizeof(leitor->buffer) - leitor->usados,
                  0);
 
+        /* Os tres retornos possiveis de recv():
+         *   n > 0  - chegaram n bytes (pode ser MENOS que uma mensagem
+         *            inteira, ou mais de uma mensagem de uma vez);
+         *   n == 0 - o outro lado fechou a conexao de forma ordenada. E
+         *            assim que o servidor descobre que um cliente saiu;
+         *   n < 0  - erro (conexao perdida, socket invalido).
+         *
+         * Note que recv() NAO devolve "uma mensagem": ele devolve bytes do
+         * fluxo. E exatamente por isso que este modulo existe. */
         if (n == 0) {
-            return LINHA_FECHADA;   /* o outro lado fechou a conexao */
+            return LINHA_FECHADA;
         }
         if (n < 0) {
             return LINHA_ERRO;

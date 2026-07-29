@@ -6,7 +6,7 @@ Universidade Estadual de Mato Grosso do Sul - Ciencia da Computacao
 
 ALUNO
 -----
-Victor Vendruscolo
+Victor Rech Vendruscolo
 
 
 COMPILACAO

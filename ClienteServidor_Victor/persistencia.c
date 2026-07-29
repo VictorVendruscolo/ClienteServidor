@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -18,23 +17,18 @@
 #define ARQ_HISTORICO   "dados/historico.txt"
 #define ARQ_FILA        "dados/fila.txt"
 
-/* Quantos usuarios sao copiados da fila por vez ao regravar o arquivo. */
-#define LOTE_GRAVACAO 64
+#define LOTE_GRAVACAO 64            // usuarios copiados por vez da fila
 
-/* Os arquivos ficam abertos o tempo todo: abrir e fechar a cada evento
- * ficaria lento com muitas conexoes por segundo. */
+// Abertos o tempo todo: abrir e fechar a cada evento ficaria lento com
+// muitas conexoes por segundo.
 static FILE *arq_servidor  = NULL;
 static FILE *arq_sessoes   = NULL;
 static FILE *arq_historico = NULL;
 
-/* Um mutex so para toda a gravacao. Como cada escrita e curta e seguida de
- * fflush, uma trava basta e o modulo fica simples. */
 static pthread_mutex_t mutex_dados = PTHREAD_MUTEX_INITIALIZER;
 
-/*
- * Coloca em 'destino' a data e hora atuais como "AAAA-MM-DD HH:MM:SS".
- * Usa localtime_r, que e a versao segura para usar com threads.
- */
+// Data e hora como "AAAA-MM-DD HH:MM:SS". localtime_r e a versao segura
+// para usar com threads.
 static void agora_texto(char *destino, size_t tam)
 {
     time_t    agora = time(NULL);
@@ -49,8 +43,7 @@ static void agora_texto(char *destino, size_t tam)
 
 int persistencia_init(void)
 {
-    /* mkdir devolve EEXIST se o diretorio ja existe, o que nao e erro. */
-    if (mkdir(DIR_DADOS, 0755) != 0 && errno != EEXIST) {
+    if (mkdir(DIR_DADOS, 0755) != 0 && errno != EEXIST) {   // EEXIST nao e erro
         perror("Erro ao criar o diretorio dados/");
         return -1;
     }
@@ -80,12 +73,10 @@ void persistencia_log_servidor(const char *formato, ...)
 
     pthread_mutex_lock(&mutex_dados);
 
-    /* No terminal, o texto que aparece na tela do servidor. */
-    printf("%s\n", mensagem);
+    printf("%s\n", mensagem);               // tela do servidor
     fflush(stdout);
 
-    /* No arquivo, o mesmo texto com data e hora na frente. */
-    if (arq_servidor != NULL) {
+    if (arq_servidor != NULL) {             // arquivo, com data e hora
         fprintf(arq_servidor, "[%s] %s\n", instante, mensagem);
         fflush(arq_servidor);
     }
@@ -133,9 +124,7 @@ void persistencia_salva_fila(void)
 
     pthread_mutex_lock(&mutex_dados);
 
-    /* Este arquivo guarda o estado atual, entao e reescrito inteiro ("w") a
-     * cada insercao, em vez de receber uma linha no fim. */
-    arquivo = fopen(ARQ_FILA, "w");
+    arquivo = fopen(ARQ_FILA, "w");         // "w": guarda o estado atual
     if (arquivo == NULL) {
         pthread_mutex_unlock(&mutex_dados);
         return;
@@ -143,8 +132,7 @@ void persistencia_salva_fila(void)
 
     fprintf(arquivo, "%s\n", FILA_CABECALHO);
 
-    /* Le a fila em lotes, para travar o mutex dela por pouco tempo de cada
-     * vez em vez de segurar durante toda a gravacao. */
+    // le em lotes, para travar o mutex da fila por pouco tempo de cada vez
     do {
         int i;
 

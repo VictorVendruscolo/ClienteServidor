@@ -1,38 +1,3 @@
-/*
- * carga.c - Gerador automatico de clientes para o teste de carga.
- *
- * Trabalho de Redes de Computadores - UEMS
- * Aluno: Victor Vendruscolo
- *
- * Compilacao:  make carga
- * Execucao:    ./carga <quantidade>
- *
- * Exemplos:    ./carga 100
- *              ./carga 1000
- *              ./carga 10000
- *
- * O enunciado pede o teste com 100, 1000 e 10000 clientes gerados
- * automaticamente, e permite fazer isso com um segundo programa cliente que
- * receba a quantidade como parametro. Este e esse programa; ele nao
- * substitui o ./cliente, que continua sendo iniciado sem parametros.
- *
- * A estrutura e a do laco de conexoes visto em aula (porta.c), trocando
- * "variar a porta" por "repetir N vezes na mesma porta". Cada cliente gerado
- * conecta e se autentica, ocupando uma sessao no servidor igual a um
- * ./cliente de verdade.
- *
- * As conexoes ficam abertas ate o operador apertar ENTER. Isso e essencial:
- * sem manter, o programa estaria abrindo e fechando N conexoes em sequencia
- * e o servidor nunca atenderia mais de uma por vez. Mantendo todas ativas,
- * ele precisa sustentar N clientes simultaneos, que e o que o teste mede.
- *
- * Reinicie o servidor antes de cada execucao, para a numeracao das conexoes
- * na tela dele comecar em [#1].
- *
- * Antes do teste com muitos clientes, aumente o limite de descritores do
- * terminal:   ulimit -n 20000
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,10 +11,12 @@
 #include "comum.h"
 #include "protocolo.h"
 
-/* De quantas em quantas conexoes o progresso aparece na tela. */
-#define INTERVALO_RELATORIO 100
+// Gerador de clientes para o teste de carga: ./carga <quantidade>
+// Nao substitui o ./cliente, que continua sem parametros.
+// Antes de muitos clientes:  ulimit -n 20000
 
-/* Abre uma conexao. Devolve o socket ou -1 se falhar. */
+#define INTERVALO_RELATORIO 100     // de quantas em quantas mostra o progresso
+
 static int conecta(void)
 {
     struct sockaddr_in endereco;
@@ -77,7 +44,6 @@ static int conecta(void)
     return sock;
 }
 
-/* Manda a credencial e confere a resposta. Devolve 1 se foi liberado. */
 static int autentica(int sock)
 {
     LeitorLinha leitor;
@@ -108,7 +74,6 @@ int main(int argc, char *argv[])
     int  i;
     char tecla[8];
 
-    /* Escrever num socket que o servidor fechou nao deve derrubar o teste. */
     signal(SIGPIPE, SIG_IGN);
 
     if (argc != 2) {
@@ -135,6 +100,7 @@ int main(int argc, char *argv[])
     for (i = 0; i < quantidade; i++) {
         int sock = conecta();
 
+        // cada cliente gerado tambem se autentica, ocupando uma sessao
         if (sock >= 0 && !autentica(sock)) {
             close(sock);
             sock = -1;
@@ -146,9 +112,8 @@ int main(int argc, char *argv[])
             abertos++;
         } else {
             falhas++;
-            /* Na primeira falha mostra o motivo: quase sempre e limite de
-             * descritores (ver ulimit -n) ou servidor fora do ar. */
             if (falhas == 1) {
+                // quase sempre e limite de descritores ou servidor fora do ar
                 printf("Primeira falha na conexao %d: %s\n", i + 1, strerror(errno));
             }
         }
@@ -159,13 +124,15 @@ int main(int argc, char *argv[])
         }
     }
 
+    // manter todas abertas e o que faz o servidor sustentar N clientes ao
+    // mesmo tempo, em vez de N conexoes em sequencia
     printf("\nResultado: %d conexoes abertas, %d falhas.\n", abertos, falhas);
     printf("As %d conexoes permanecem ativas simultaneamente.\n", abertos);
     printf("Pressione ENTER para encerra-las...");
     fflush(stdout);
 
     if (fgets(tecla, sizeof(tecla), stdin) == NULL) {
-        /* Entrada encerrada: fecha assim mesmo. */
+        // entrada encerrada: fecha assim mesmo
     }
 
     for (i = 0; i < quantidade; i++) {

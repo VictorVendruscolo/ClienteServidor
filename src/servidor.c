@@ -627,11 +627,25 @@ int main(void)
         return 1;
     }
 
+    /* Preenche o endereco onde o servidor vai escutar.
+     *
+     * sockaddr_in  - estrutura de endereco para IPv4 (o "in" e de internet).
+     * AF_INET      - familia de enderecos IPv4.
+     * INADDR_ANY   - aceita conexoes por QUALQUER interface de rede da
+     *                maquina (placa de rede, wi-fi, loopback). So faz sentido
+     *                do lado servidor; o cliente precisa de um IP concreto.
+     * htons        - "host to network short": converte o numero da porta da
+     *                ordem de bytes do processador (little-endian no x86)
+     *                para a ordem usada na rede (big-endian). Sem isso, a
+     *                porta 8080 chegaria trocada do outro lado. */
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family      = AF_INET;
-    endereco_servidor.sin_addr.s_addr = INADDR_ANY;   /* qualquer interface */
+    endereco_servidor.sin_addr.s_addr = INADDR_ANY;
     endereco_servidor.sin_port        = htons(SERVER_PORTA);
 
+    /* bind: reserva a porta para este socket. O cast para (struct sockaddr *)
+     * existe porque a API de sockets e generica: a mesma funcao aceita IPv4 e
+     * IPv6, e por isso tambem precisa receber o tamanho da estrutura. */
     if (bind(socket_escuta, (struct sockaddr *) &endereco_servidor,
              sizeof(endereco_servidor)) < 0) {
         perror("Erro no bind");
@@ -639,6 +653,9 @@ int main(void)
         return 1;
     }
 
+    /* listen: coloca o socket em modo de escuta. BACKLOG e o tamanho da fila
+     * de conexoes que ja chegaram e ainda nao passaram pelo accept() - NAO e
+     * o limite de clientes atendidos, que depende de memoria e descritores. */
     if (listen(socket_escuta, BACKLOG) < 0) {
         perror("Erro no listen");
         close(socket_escuta);
@@ -664,6 +681,13 @@ int main(void)
         pthread_t          identificador_thread;
         int                novo_socket;
 
+        /* accept: bloqueia (dorme sem gastar CPU) ate uma conexao chegar, e
+         * devolve um socket NOVO, exclusivo daquele cliente. O socket de
+         * escuta continua intacto para receber os proximos. E essa separacao
+         * entre "socket de escuta" e "socket do cliente" que permite atender
+         * varios ao mesmo tempo - vale para threads, fork e multiplexacao.
+         * O terceiro parametro e de entrada e saida: entra com o tamanho do
+         * buffer e sai com o tamanho que foi realmente preenchido. */
         novo_socket = accept(socket_escuta,
                              (struct sockaddr *) &endereco_cliente,
                              &tamanho_endereco);

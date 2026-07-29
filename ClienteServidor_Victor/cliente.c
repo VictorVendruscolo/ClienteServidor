@@ -1,33 +1,3 @@
-/*
- * cliente.c - Cliente da Plataforma de Monitoramento de Filas.
- *
- * Trabalho de Redes de Computadores - UEMS
- * Aluno: Victor Vendruscolo
- *
- * Execucao:  ./cliente   (sem parametros)
- *
- * O endereco e a porta do servidor saem das constantes SERVER_IP e
- * SERVER_PORTA, definidas em comum.h, sem precisar de argumento na linha de
- * comando.
- *
- * O cliente usa duas threads porque precisa fazer duas coisas ao mesmo
- * tempo: esperar o operador digitar uma opcao e receber as mensagens que o
- * servidor manda sozinho (o broadcast, quando outro cliente cadastra um
- * usuario). Com um fluxo so, o programa ficaria parado no teclado e o aviso
- * so apareceria depois - o enunciado pede atualizacao em tempo real.
- *
- *   - thread receptora: unica que le do socket. Imprime o que chega e avisa
- *     a thread principal quando a resposta de um comando terminou;
- *   - thread principal: le o teclado, manda os comandos e espera a resposta,
- *     com tempo limite.
- *
- * Retransmissao: a resposta do servidor serve de confirmacao do comando. Se
- * ela nao chegar em TIMEOUT_RESPOSTA_SEG segundos, o cliente manda de novo o
- * MESMO comando com o MESMO numero de sequencia, ate MAX_TENTATIVAS vezes. E
- * esse numero que permite ao servidor perceber o reenvio e repetir a
- * resposta em vez de executar duas vezes.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,30 +13,33 @@
 #include "comum.h"
 #include "protocolo.h"
 
-/* Qual comando esta esperando resposta. */
+// Duas threads: a receptora le o socket e a principal le o teclado. Com um
+// fluxo so, o programa ficaria parado no teclado e o broadcast so apareceria
+// depois - o enunciado pede atualizacao em tempo real.
+
+// Qual comando espera resposta
 #define AGUARDA_NADA      0
 #define AGUARDA_ADD       1
 #define AGUARDA_LIST      2
 #define AGUARDA_HEARTBEAT 3
 
-/* Ligacao entre a thread receptora e a thread principal. */
+// Ligacao entre a thread receptora e a principal
 typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t  condicao;
 
-    int aguardando;          /* comando que espera resposta (AGUARDA_*)   */
-    int resposta_completa;   /* 1 quando a resposta terminou de chegar    */
-    int conexao_ativa;       /* 0 quando o servidor fecha ou da erro      */
-    int dentro_do_bloco;     /* 1 entre o cabecalho e o rodape da fila    */
+    int aguardando;
+    int resposta_completa;
+    int conexao_ativa;
+    int dentro_do_bloco;     // entre o cabecalho e o rodape da fila
 } Canal;
 
 static Canal  canal;
 static int    socket_servidor = -1;
 
-/*
- * Avisa a thread principal que a resposta chegou.
- * Chamar com o mutex do canal ja travado.
- */
+// ---------- thread receptora ----------
+
+// Chamar com o mutex do canal ja travado.
 static void marca_resposta_completa(void)
 {
     canal.resposta_completa = 1;
@@ -74,18 +47,15 @@ static void marca_resposta_completa(void)
     pthread_cond_signal(&canal.condicao);
 }
 
-/*
- * Imprime a linha recebida conforme o comando que a pediu, no formato das
- * telas do enunciado.
- */
+// Imprime a linha conforme o comando que a pediu, no formato das telas.
 static void imprime_resposta(int comando, const char *linha, int primeira_linha)
 {
     if (strncmp(linha, RESP_ADD_OK, strlen(RESP_ADD_OK)) == 0) {
-        /* "ADD_OK <id> <nome>" vira "Usuário <nome> adicionado." */
         const char *resto = linha + strlen(RESP_ADD_OK);
         int         id    = 0;
         int         deslocamento = 0;
 
+        // "ADD_OK <id> <nome>" vira "Usuário <nome> adicionado."
         if (sscanf(resto, "%d %n", &id, &deslocamento) == 1 && deslocamento > 0) {
             printf("Usuário %s adicionado.\n", resto + deslocamento);
         } else {
@@ -105,9 +75,8 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
     }
 
     if (strcmp(linha, FILA_CABECALHO) == 0) {
-        /* No heartbeat com novidade, anuncia antes do bloco. */
         if (comando == AGUARDA_HEARTBEAT && primeira_linha) {
-            printf("Heartbeat:\n");
+            printf("Heartbeat:\n");     // anuncia antes do bloco
         } else {
             printf("\n");
         }
@@ -120,15 +89,11 @@ static void imprime_resposta(int comando, const char *linha, int primeira_linha)
         return;
     }
 
-    /* Linha "id - nome" do bloco, ou alguma resposta nao prevista. */
-    printf("%s\n", linha);
+    printf("%s\n", linha);              // linha "id - nome" do bloco
 }
 
-/*
- * Le o socket ate a conexao acabar. E a unica funcao do cliente que chama
- * recv(): deixando a leitura num lugar so, duas threads nunca disputam os
- * mesmos bytes.
- */
+// Unica funcao do cliente que chama recv(): assim duas threads nunca
+// disputam os mesmos bytes.
 static void *thread_receptora(void *argumento)
 {
     LeitorLinha leitor;
@@ -148,9 +113,7 @@ static void *thread_receptora(void *argumento)
             break;
         }
 
-        /* Broadcast: nao pertence a resposta nenhuma e aparece na hora, mesmo
-         * no meio do menu. Vem sem acento (ASCII puro, ver comum.h) e e
-         * reescrito aqui em portugues correto so para exibir. */
+        // broadcast: chega sem o cliente pedir, e sem acento; acentua aqui
         if (strncmp(linha, BROADCAST_NOVO_USUARIO,
                     strlen(BROADCAST_NOVO_USUARIO)) == 0) {
             printf("[Broadcast] Novo usuário: %s\n",
@@ -166,10 +129,8 @@ static void *thread_receptora(void *argumento)
 
         pthread_mutex_lock(&canal.mutex);
 
-        /* Regra unica: so mostro uma resposta se algum comando estiver
-         * esperando por ela. Se nao houver, e a copia atrasada de um comando
-         * que ja foi reenviado e abandonado, e ela e ignorada para nao ser
-         * confundida com a resposta do proximo comando. */
+        // so mostra a resposta se algum comando estiver esperando por ela;
+        // senao e copia atrasada de um comando reenviado e abandonado
         if (!canal.dentro_do_bloco) {
             if (strcmp(linha, FILA_CABECALHO) == 0) {
                 canal.dentro_do_bloco = 1;
@@ -199,21 +160,14 @@ static void *thread_receptora(void *argumento)
     return NULL;
 }
 
-/*
- * Manda um comando e espera a resposta.
- *
- * comando_texto - a linha ja montada (ex.: "ADD 3 20 Carlos")
- * tipo          - AGUARDA_ADD, AGUARDA_LIST ou AGUARDA_HEARTBEAT
- *
- * Reenvia o mesmo texto (logo, o mesmo numero de sequencia) enquanto a
- * resposta nao chegar no tempo, ate MAX_TENTATIVAS vezes.
- *
- * Devolve 1 se a resposta chegou, 0 se o servidor nao respondeu e -1 se a
- * conexao caiu.
- */
+// ---------- envio com reenvio ----------
+
+// Manda o comando e espera a resposta. Sem resposta no tempo, reenvia o
+// mesmo texto (logo, o mesmo numero de sequencia), ate MAX_TENTATIVAS.
+// Devolve 1 se veio resposta, 0 se nao veio, -1 se a conexao caiu.
 static int envia_comando(const char *comando_texto, int tipo)
 {
-    int envios = 0;      /* quantas vezes o comando foi para a rede */
+    int envios = 0;
     int obtida = 0;
     int caiu   = 0;
 
@@ -239,9 +193,8 @@ static int envia_comando(const char *comando_texto, int tipo)
         {
             struct timespec limite;
 
-            /* Hora de desistir de esperar. O pthread_cond_timedwait quer um
-             * instante absoluto contado da mesma origem que o time() usa,
-             * entao basta somar o limite ao horario de agora. */
+            // pthread_cond_timedwait quer um instante absoluto, da mesma
+            // origem que o time() usa
             limite.tv_sec  = time(NULL) + TIMEOUT_RESPOSTA_SEG;
             limite.tv_nsec = 0;
 
@@ -258,8 +211,7 @@ static int envia_comando(const char *comando_texto, int tipo)
         }
     }
 
-    /* Para de esperar resposta: daqui pra frente, copia atrasada que chegar
-     * sera ignorada pela thread receptora. */
+    // para de esperar: copia atrasada que chegar sera ignorada
     pthread_mutex_lock(&canal.mutex);
     canal.aguardando = AGUARDA_NADA;
     pthread_mutex_unlock(&canal.mutex);
@@ -270,10 +222,9 @@ static int envia_comando(const char *comando_texto, int tipo)
     return obtida ? 1 : 0;
 }
 
-/*
- * Le uma linha do teclado, ja sem o '\n'.
- * Devolve 1 se leu e 0 se a entrada acabou (Ctrl+D).
- */
+// ---------- teclado ----------
+
+// Devolve 1 se leu, 0 se a entrada acabou (Ctrl+D).
 static int le_teclado(char *destino, size_t tam)
 {
     if (fgets(destino, (int) tam, stdin) == NULL) {
@@ -283,10 +234,6 @@ static int le_teclado(char *destino, size_t tam)
     return 1;
 }
 
-/*
- * Confere se o nome pode ser enviado: nao vazio e sem caracteres de
- * controle, que quebrariam a divisao das mensagens por linha.
- */
 static int nome_valido(const char *nome)
 {
     int i;
@@ -297,16 +244,15 @@ static int nome_valido(const char *nome)
     for (i = 0; nome[i] != '\0'; i++) {
         unsigned char c = (unsigned char) nome[i];
         if (c < 32 || c == 127) {
-            return 0;
+            return 0;   // caractere de controle quebraria a divisao por linha
         }
     }
     return 1;
 }
 
-/*
- * Opcao 1: pede o identificador e o nome, e manda o comando ADD.
- * Devolve 0 para seguir no menu e -1 se a conexao caiu.
- */
+// ---------- opcoes do menu ----------
+
+// Opcao 1. Devolve 0 para seguir no menu e -1 se a conexao caiu.
 static int opcao_adicionar_usuario(int sequencia)
 {
     char entrada[TAM_LINHA];
@@ -338,9 +284,7 @@ static int opcao_adicionar_usuario(int sequencia)
         return 0;
     }
 
-    /* Copia para um buffer do tamanho do campo; o tamanho ja foi conferido
-     * acima, entao cabe com certeza. */
-    strcpy(nome, entrada);
+    strcpy(nome, entrada);      // tamanho ja conferido acima
 
     snprintf(comando, sizeof(comando), "%s %d %d %s",
              CMD_ADD, sequencia, id, nome);
@@ -352,7 +296,7 @@ static int opcao_adicionar_usuario(int sequencia)
     }
 }
 
-/* Opcao 2: pede a fila completa. */
+// Opcao 2
 static int opcao_ver_fila(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -366,7 +310,7 @@ static int opcao_ver_fila(int sequencia)
     }
 }
 
-/* Opcao 3: pergunta o que os outros clientes cadastraram. */
+// Opcao 3
 static int opcao_heartbeat(int sequencia)
 {
     char comando[TAM_LINHA];
@@ -380,7 +324,6 @@ static int opcao_heartbeat(int sequencia)
     }
 }
 
-/* Mostra o menu principal. */
 static void mostra_menu(void)
 {
     printf("\n");
@@ -391,7 +334,8 @@ static void mostra_menu(void)
     fflush(stdout);
 }
 
-/* Abre a conexao TCP com o servidor. Devolve 0 se deu certo. */
+// ---------- conexao ----------
+
 static int conecta_ao_servidor(void)
 {
     struct sockaddr_in endereco;
@@ -406,8 +350,7 @@ static int conecta_ao_servidor(void)
     endereco.sin_family = AF_INET;
     endereco.sin_port   = htons(SERVER_PORTA);
 
-    /* inet_pton converte o endereco de texto para binario; e melhor que
-     * inet_addr porque distingue erro de endereco valido. */
+    // inet_pton: texto para binario; distingue erro de endereco valido
     if (inet_pton(AF_INET, SERVER_IP, &endereco.sin_addr) <= 0) {
         fprintf(stderr, "Endereço IP inválido em SERVER_IP: %s\n", SERVER_IP);
         close(socket_servidor);
@@ -427,11 +370,8 @@ static int conecta_ao_servidor(void)
     return 0;
 }
 
-/*
- * Manda a credencial que esta no codigo e espera a resposta.
- * Isso acontece antes de a thread receptora existir, entao a troca e
- * sequencial: manda uma mensagem, le uma. Devolve 0 se foi liberado.
- */
+// Login automatico com a credencial do codigo. Acontece antes de a thread
+// receptora existir, entao e sequencial: manda uma, le uma.
 static int autentica(void)
 {
     LeitorLinha leitor;
@@ -466,12 +406,10 @@ static int autentica(void)
 int main(void)
 {
     pthread_t receptora;
-    int       sequencia = 0;   /* numera os comandos desta conexao */
+    int       sequencia = 0;   // numera os comandos desta conexao
     int       encerrar  = 0;
 
-    /* Sem isso, escrever num socket que o servidor ja fechou mataria o
-     * processo em vez de devolver um erro que da para tratar. */
-    signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);   // sem isso, escrever em socket fechado mata o processo
 
     if (conecta_ao_servidor() != 0) {
         return 1;
@@ -483,7 +421,7 @@ int main(void)
         return 1;
     }
 
-    /* Prepara a ligacao entre as duas threads. */
+    // prepara a ligacao entre as duas threads
     memset(&canal, 0, sizeof(canal));
     canal.conexao_ativa = 1;
     canal.aguardando    = AGUARDA_NADA;
@@ -496,7 +434,7 @@ int main(void)
         return 1;
     }
 
-    /* Laco do menu */
+    // laco do menu
     while (!encerrar) {
         char entrada[TAM_LINHA];
         int  resultado = 0;
@@ -514,7 +452,7 @@ int main(void)
         mostra_menu();
 
         if (!le_teclado(entrada, sizeof(entrada))) {
-            break;   /* fim da entrada (Ctrl+D): encerra como se fosse "Sair" */
+            break;              // Ctrl+D encerra como se fosse "Sair"
         }
 
         if (strcmp(entrada, "1") == 0) {
@@ -529,7 +467,7 @@ int main(void)
         } else if (strcmp(entrada, "0") == 0) {
             encerrar = 1;
         } else if (entrada[0] == '\0') {
-            continue;   /* linha em branco: so mostra o menu de novo */
+            continue;
         } else {
             printf("Opção inválida. Escolha 1, 2, 3 ou 0.\n");
         }
@@ -540,11 +478,10 @@ int main(void)
         }
     }
 
-    /* Encerramento */
+    // encerramento
     (void) protocolo_envia_linha(socket_servidor, CMD_SAIR);
 
-    /* Fechar o socket faz a thread receptora sair do recv() e terminar. */
-    shutdown(socket_servidor, SHUT_RDWR);
+    shutdown(socket_servidor, SHUT_RDWR);   // faz a receptora sair do recv()
     pthread_join(receptora, NULL);
     close(socket_servidor);
 

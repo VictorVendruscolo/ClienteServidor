@@ -450,18 +450,27 @@ static int conecta_ao_servidor(void)
         return -1;
     }
 
+    /* Diferente do servidor, o cliente precisa de um endereco CONCRETO: ele
+     * e o lado ativo da conexao, quem procura. O servidor e o lado passivo,
+     * que espera - por isso la usamos INADDR_ANY e aqui um IP de verdade. */
     memset(&endereco, 0, sizeof(endereco));
     endereco.sin_family = AF_INET;
     endereco.sin_port   = htons(SERVER_PORTA);
 
-    /* inet_pton converte o endereco em texto para o formato binario da rede;
-     * e mais segura que inet_addr por distinguir erro de endereco valido. */
+    /* inet_pton ("presentation to network"): converte o endereco escrito em
+     * texto ("192.168.0.15") para o formato binario que a rede usa. E mais
+     * segura que a inet_addr dos exemplos antigos, porque cobre IPv4 e IPv6
+     * e distingue um erro de um endereco valido. */
     if (inet_pton(AF_INET, SERVER_IP, &endereco.sin_addr) <= 0) {
         fprintf(stderr, "Endereço IP inválido em SERVER_IP: %s\n", SERVER_IP);
         close(socket_servidor);
         return -1;
     }
 
+    /* connect e o inverso do accept: uma tentativa ativa de estabelecer a
+     * conexao, e nao uma espera. E aqui que acontece o aperto de mao em tres
+     * etapas do TCP; quando esta funcao retorna com sucesso, a conexao ja
+     * esta estabelecida dos dois lados. */
     if (connect(socket_servidor, (struct sockaddr *) &endereco,
                 sizeof(endereco)) < 0) {
         fprintf(stderr, "Não foi possível conectar em %s:%d - %s\n",

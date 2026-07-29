@@ -1,20 +1,10 @@
-/*
- * fila.c - Implementacao da fila compartilhada (ver fila.h).
- *
- * Trabalho de Redes de Computadores - UEMS
- * Aluno: Victor Vendruscolo
- */
-
 #include <string.h>
 #include <pthread.h>
 
 #include "fila.h"
 
-/*
- * O vetor e 'static' para so este arquivo poder toca-lo. Assim todo acesso
- * de fora passa pelas funcoes abaixo, que travam o mutex - e nao tem como
- * alguem esquecer de travar.
- */
+// static: so este arquivo alcanca o vetor, entao todo acesso passa pelas
+// funcoes abaixo, que travam o mutex.
 static Usuario         fila[MAX_USUARIOS_FILA];
 static int             quantidade = 0;
 static pthread_mutex_t fila_mutex;
@@ -30,11 +20,12 @@ int fila_init(void)
     return 0;
 }
 
+// Insere no fim da fila. Devolve o indice, ou FILA_CHEIA.
 int fila_adiciona(int id, const char *nome)
 {
     int indice;
 
-    pthread_mutex_lock(&fila_mutex);
+    pthread_mutex_lock(&fila_mutex);            // secao critica
 
     if (quantidade >= MAX_USUARIOS_FILA) {
         pthread_mutex_unlock(&fila_mutex);
@@ -43,12 +34,8 @@ int fila_adiciona(int id, const char *nome)
 
     indice = quantidade;
     fila[indice].id = id;
-
-    /* strncpy nao coloca o '\0' quando a origem enche o destino, por isso
-     * escrevo o terminador na mao. */
     strncpy(fila[indice].nome, nome, TAM_NOME - 1);
-    fila[indice].nome[TAM_NOME - 1] = '\0';
-
+    fila[indice].nome[TAM_NOME - 1] = '\0';     // strncpy nao garante o '\0'
     quantidade++;
 
     pthread_mutex_unlock(&fila_mutex);
@@ -66,6 +53,8 @@ int fila_tamanho(void)
     return total;
 }
 
+// Copia um trecho da fila. Copiar sob o mutex deixa quem chamou com um
+// retrato consistente, sem precisar prender a fila para enviar.
 int fila_copia_intervalo(int inicio, int fim, Usuario *destino, int max)
 {
     int copiados = 0;

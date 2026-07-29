@@ -38,6 +38,15 @@ int fila_adiciona(int id, const char *nome)
 {
     int indice;
 
+    /* Inicio da secao critica: o trecho de codigo que so uma thread pode
+     * executar por vez.
+     *
+     * Sem o mutex haveria uma condicao de corrida (race condition): duas
+     * threads poderiam ler `quantidade` com o mesmo valor, escrever as duas
+     * na mesma posicao do vetor e uma sobrescrever a outra - perdendo um
+     * usuario e deixando o contador errado.
+     *
+     * pthread_mutex_lock faz a thread esperar se outra ja estiver dentro. */
     pthread_mutex_lock(&fila_mutex);
 
     if (quantidade >= MAX_USUARIOS_FILA) {
