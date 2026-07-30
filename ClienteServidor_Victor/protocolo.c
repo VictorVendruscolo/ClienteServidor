@@ -53,13 +53,16 @@ int protocolo_le_linha(int sock, char *destino, size_t tam)
     }
 }
 
-// envio com terminador
+// envio com terminador, num send so (dois atrasariam pelo Nagle)
 int protocolo_envia_linha(int sock, const char *linha)
 {
-    if (envia_todos(sock, linha, strlen(linha)) != 0) {
+    char buffer[TAM_LINHA + 1];
+    int  total = snprintf(buffer, sizeof(buffer), "%s\n", linha);
+
+    if (total < 0 || (size_t) total >= sizeof(buffer)) {
         return -1;
     }
-    return envia_todos(sock, "\n", 1);
+    return envia_todos(sock, buffer, (size_t) total);
 }
 
 // espacos das pontas
