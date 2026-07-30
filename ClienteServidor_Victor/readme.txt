@@ -4,10 +4,27 @@ Plataforma de Monitoramento Inteligente de Filas em Tempo Real
 Universidade Estadual de Mato Grosso do Sul - Ciencia da Computacao
 ============================================================================
 
-ALUNO
------
-Victor Rech Vendruscolo
+ALUNO: Victor Rech Vendruscolo
 
+
+CONFIGURACAO DO ENDERECO DO SERVIDOR
+------------------------------------
+Para rodar o servidor e os clientes em maquinas diferentes na mesma rede:
+
+1. Na maquina que executar o servidor, descubra o IP:
+
+       hostname -I
+
+2. Edite a primeira constante do arquivo comum.h:
+
+       #define SERVER_IP "192.168.0.15"     <- coloque o IP obtido acima
+
+3. Recompile os clientes:
+
+       make
+
+O valor padrao eh "127.0.0.1", que permite rodar cliente e servidor na mesma
+maquina sem qualquer alteracao.
 
 COMPILACAO
 ----------
@@ -24,35 +41,14 @@ EXECUCAO
 
     ./servidor
 
-2) Em cada maquina cliente (uma execucao por cliente):
+2) Em cada maquina cliente:
 
     ./cliente
 
 
-CONFIGURACAO DO ENDERECO DO SERVIDOR
-------------------------------------
-Para rodar o servidor e os clientes em maquinas diferentes na mesma rede:
-
-1. Na maquina que executara o servidor, descubra o IP:
-
-       hostname -I
-
-2. Edite a primeira constante do arquivo comum.h:
-
-       #define SERVER_IP "192.168.0.15"     <- coloque o IP obtido acima
-
-3. Recompile os clientes:
-
-       make
-
-O valor padrao e "127.0.0.1", que permite rodar cliente e servidor na mesma
-maquina sem qualquer alteracao.
-
-
 TESTE DE CARGA (100, 1000 e 10000 CLIENTES)
 -------------------------------------------
-O gerador automatico de clientes e um programa a parte, compilado por um
-alvo proprio para nao alterar o resultado do "make" sem parametros:
+O gerador automatico de clientes eh um programa a parte, compilado por:
 
     make carga
 
@@ -103,4 +99,4 @@ LIMPEZA
 -------
     make clean
 
-Remove os executaveis e os arquivos objeto.
+Remove os executaveis e os arquivos objeto, além da pasta dados.

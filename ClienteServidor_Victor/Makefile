@@ -1,7 +1,7 @@
 # make          gera cliente e servidor
 # make carga    gera o gerador de clientes do teste de carga
-# make tudo     gera os tres
-# make clean    apaga executaveis e objetos
+# make tudo     gera cliente, servidor e teste de carga
+# make clean    apaga executaveis e objetos e a pasta dados
 
 CC     = gcc
 CFLAGS = -Wall -Wextra -O2 -pthread
@@ -48,5 +48,6 @@ persistencia.o: persistencia.c persistencia.h comum.h fila.h
 
 clean:
 	rm -f cliente servidor carga *.o
+	rm -rf dados
 
 .PHONY: all tudo clean
