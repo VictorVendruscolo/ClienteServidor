@@ -49,6 +49,16 @@
 % Coluna justificada de largura fixa, usada nas tabelas longas.
 \newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
 
+% --- Nomes fixos em portugues -----------------------------------------------
+% O babel ja traduz estes rotulos, mas fixa-los aqui garante o texto correto
+% mesmo se o documento for compilado numa instalacao LaTeX sem o pacote de
+% portugues - caso em que sairia "Contents", "Figure" e "Table" em ingles.
+\renewcommand{\contentsname}{Sumário}
+\renewcommand{\figurename}{Figura}
+\renewcommand{\tablename}{Tabela}
+\renewcommand{\refname}{Referências bibliográficas}
+\renewcommand{\lstlistingname}{Código}
+
 % --- Estilo dos trechos de codigo ------------------------------------------
 \lstset{
   basicstyle=\ttfamily\footnotesize,
@@ -138,7 +148,7 @@
 
 \vspace{1.5cm}
 
-{\large Victor Vendruscolo}
+{\large Victor Rech Vendruscolo}
 
 \vfill
 
@@ -228,27 +238,33 @@ persistência fica em arquivos de texto, do lado do servidor.
 \end{figure}
 
 A técnica de múltiplos clientes escolhida foi \textbf{multithreads}
-(\texttt{pthreads}), uma das três permitidas pelo enunciado. O servidor cria uma
-thread para cada conexão aceita. Duas razões pesaram nessa escolha. A primeira é
-que a fila é compartilhada por todos os clientes: com threads, todas enxergam a
-mesma memória, e basta um \textit{mutex} para proteger o acesso. A segunda é que
-o \textit{broadcast} precisa alcançar sockets de outras conexões, o que também
-sai de graça no mesmo processo. Com \texttt{fork()}, as duas coisas exigiriam
-comunicação entre processos.
+(\texttt{pthreads}), entre as três permitidas pelo enunciado: multiplexação,
+\texttt{fork()} e threads. O servidor cria uma thread para cada conexão aceita.
+
+O que decidiu a escolha foi a fila compartilhada. Com threads, todas enxergam a
+mesma memória, e basta um \textit{mutex} para proteger o acesso; o
+\textit{broadcast} também alcança os sockets das outras conexões sem nenhum
+mecanismo extra. Com \texttt{fork()}, as duas coisas exigiriam comunicação entre
+processos, porque cada processo tem memória isolada. A multiplexação com
+\texttt{select()} resolveria o compartilhamento igualmente bem, e sem precisar de
+\textit{mutex}; ficou de fora por ser a técnica menos trabalhada ao longo do
+curso, e o prazo não permitiria aprendê-la a ponto de explicá-la com segurança.
 
 A thread principal do servidor não atende nenhum cliente. Ela apenas aceita
-conexões, cria a thread correspondente e volta a aceitar. Isso atende
-literalmente ao enunciado, que reserva ao servidor principal apenas aceitar
-conexões, distribuir eventos e monitorar sockets.
+conexões, cria a thread correspondente e volta a aceitar. Isso atende ao
+enunciado, que reserva ao servidor principal apenas aceitar conexões, distribuir
+eventos e monitorar sockets.
 
-\begin{lstlisting}[caption={Laço principal do servidor, em \texttt{servidor.c}. A thread criada recebe uma \texttt{struct} própria, com o socket, o IP de origem e o número da conexão.}]
+\begin{lstlisting}[caption={Laço principal do servidor, em \texttt{servidor.c}. A thread criada recebe uma \texttt{struct} própria, com o socket, o IP e a porta de origem e o número da conexão.}]
 for (;;) {
-    int  sock_cliente = accept(sock_escuta, ...);
+    novo_socket = accept(socket_escuta, ...);
     ...
-    ArgumentoThread *arg = malloc(sizeof(ArgumentoThread));
-    arg->sock   = sock_cliente;
-    arg->numero = ++total_conexoes;
-    pthread_create(&thread, &atributos, atende_cliente, arg);
+    dados = (DadosConexao *) malloc(sizeof(DadosConexao));
+    dados->sock  = novo_socket;
+    dados->porta = ntohs(endereco_cliente.sin_port);
+    inet_ntop(AF_INET, &endereco_cliente.sin_addr, dados->ip, ...);
+    dados->numero = ++total_conexoes;
+    pthread_create(&identificador_thread, &atributos, atende_cliente, dados);
 }
 \end{lstlisting}
 
@@ -266,13 +282,13 @@ typedef struct {
 } Usuario;
 
 static Usuario         fila[MAX_USUARIOS_FILA];  /* 20000 registros */
-static int             total;                    /* posicoes em uso */
-static pthread_mutex_t mutex;                    /* protege os dois */
+static int             quantidade;               /* posicoes em uso */
+static pthread_mutex_t fila_mutex;               /* protege os dois */
 \end{lstlisting}
 
 O vetor foi preferido à lista ligada pela simplicidade. O limite de 20.000
-registros cobre com folga o teste de carga de 10.000 clientes, mesmo que cada um
-insira mais de um usuário. Esse limite é uma decisão de implementação declarada
+registros cobre com folga o teste de carga de 10.000 clientes. Esse limite é uma
+decisão de implementação declarada
 na Seção~\ref{sec:omissos}.
 
 Cada conexão guarda, por conta própria, um marcador do último índice da fila que
@@ -286,12 +302,12 @@ Toda mensagem é uma linha de texto ASCII terminada em \texttt{\textbackslash n}
 O comando vem em maiúsculas, seguido dos argumentos separados por espaço. Essa
 escolha resolve o problema central de trabalhar sobre TCP: o TCP entrega um
 fluxo de bytes, não mensagens delimitadas, e uma chamada de \texttt{send()} não
-corresponde necessariamente a uma de \texttt{recv()}. Quem lê acumula os bytes em
-um buffer próprio até encontrar a quebra de linha.
+corresponde necessariamente a uma de \texttt{recv()}. Quem lê consome um byte por
+vez até encontrar a quebra de linha, e devolve à camada de cima exatamente uma
+mensagem por chamada.
 
 Respostas de várias linhas usam um cabeçalho e um rodapé fixos. O cliente lê
-linha a linha até bater no rodapé, sem precisar saber quantas linhas virão. É o
-formato que o próprio enunciado mostra nas telas.
+linha a linha até bater no rodapé, sem precisar saber quantas linhas virão.
 
 \begin{table}[H]
 \centering
@@ -357,7 +373,7 @@ Somente definições \\
 \addlinespace
 \texttt{protocolo.c/.h} &
 Envio e leitura de mensagens delimitadas por linha &
-\texttt{protocolo\_leitor\_init}, \texttt{protocolo\_le\_linha}, \texttt{protocolo\_envia\_linha}, \texttt{protocolo\_limpa\_bordas} \\
+\texttt{protocolo\_le\_linha}, \texttt{protocolo\_envia\_linha}, \texttt{protocolo\_limpa\_bordas} \\
 \addlinespace
 \texttt{fila.c/.h} &
 Fila compartilhada protegida por \textit{mutex} &
@@ -495,12 +511,31 @@ código que nunca é executado \\
 \bottomrule
 \end{longtable}}
 
-O código passou por uma revisão deliberada depois de funcionar. Sete mecanismos
-que existiam por precaução, e não por necessidade, foram removidos, entre eles o
-\texttt{pthread\_rwlock\_t} da tabela de sessões e o tratador de
-\texttt{SIGINT}. O programa saiu de 1.545 para 1.326 linhas de código sem perder
-nenhuma funcionalidade, e toda a bateria de testes foi repetida com resultados
-idênticos.
+\subsection{Duas construções que merecem explicação}
+
+O código usa dois recursos que não aparecem nos exemplos vistos em aula. Como são
+os pontos que menos se reconhecem numa primeira leitura, ficam explicados aqui.
+
+\vspace{6pt}
+\noindent\textbf{A espera com prazo, no cliente.} A thread do menu envia um
+comando e precisa aguardar a resposta --- mas quem recebe a resposta é a outra
+thread, a que lê o socket. As duas se comunicam por uma variável de condição
+(\texttt{pthread\_cond\_timedwait}): a thread do menu dorme até ser avisada, ou
+até o prazo de 3 segundos terminar. O prazo é informado como um instante
+absoluto, \texttt{time(NULL)} mais 3, porque é isso que a função espera receber.
+A espera fica dentro de um \texttt{while}, e não de um \texttt{if}, porque uma
+variável de condição pode acordar sem ninguém ter sinalizado; a condição é
+reconferida a cada acorde.
+
+\vspace{6pt}
+\noindent\textbf{A separação do nome, no servidor.} O comando de cadastro chega
+como uma linha só, e o nome pode conter espaços --- então não dá para separar a
+linha em palavras. A leitura é feita com
+\texttt{sscanf(linha, "\%*s \%d \%d \%n", ...)}. O \texttt{\%*s} lê a primeira
+palavra e a descarta, porque o comando já é conhecido. Os dois \texttt{\%d} leem
+o número de sequência e o identificador. O \texttt{\%n} não lê nada: ele grava
+quantos caracteres foram consumidos até ali, o que marca exatamente onde o nome
+começa. O resto da linha, a partir desse ponto, é o nome inteiro.
 
 % =============================================================================
 % ITEM 3 - DECISOES OMISSAS NA ESPECIFICACAO
@@ -521,17 +556,14 @@ diante de ambiguidade, o que ficou fora de escopo e as limitações conhecidas.
         autenticados. Implementada como vetor de tamanho fixo
         (\texttt{MAX\_SESSOES = 12000}), protegido por um \textit{mutex}.
 
-  \item \textbf{Serialização de escrita por socket.} Sem ela, uma mensagem de
+  \item \textbf{Serialização de escrita.} Sem ela, uma mensagem de
         \textit{broadcast} disparada por outra thread poderia entrar no meio de
-        uma resposta de várias linhas e quebrar o protocolo. Cada sessão tem um
-        \textit{mutex} de envio próprio, mantido travado do cabeçalho ao rodapé
-        do bloco.
-
-  \item \textbf{Regra para evitar impasse (\textit{deadlock}).} O \textit{mutex}
-        de envio de uma sessão é obtido sem travar a tabela. Quem o obtém é a
-        própria thread dona da sessão, e só ela remove aquela entrada, então a
-        entrada existe com certeza. A regra que sustenta isso: uma thread nunca
-        remove a própria sessão enquanto segura o \textit{mutex} de envio dela.
+        uma resposta de várias linhas e quebrar o protocolo. Existe um único
+        \textit{mutex} de envio, comum a todos os sockets, mantido travado do
+        cabeçalho ao rodapé do bloco. Os três \textit{mutex} do servidor são
+        sempre obtidos na mesma ordem --- tabela de sessões, envio, fila ---, e
+        nenhum caminho do código inverte essa ordem. É isso que descarta a
+        possibilidade de impasse (\textit{deadlock}).
 
   \item \textbf{Sinal \texttt{SIGPIPE} ignorado}, no cliente e no servidor.
         Escrever em um socket que o outro lado já fechou gera esse sinal, cujo
@@ -592,8 +624,7 @@ Usuário e senha fixos no código, sem validação contra arquivo ou banco. Uma
 credencial única, coerente com o sistema ter um único tipo de operador \\
 \addlinespace
 Unicidade de identificador &
-Não há verificação. Dois usuários podem ter o mesmo identificador, e nada no
-enunciado exige o contrário \\
+Não há verificação. Dois usuários podem ter o mesmo identificador \\
 \addlinespace
 Capacidade da fila &
 Limite fixo de 20.000 registros. Ao encher, o servidor responde
@@ -611,15 +642,9 @@ arquivos de log e histórico continuam existindo entre execuções \\
 \bottomrule
 \end{longtable}}
 
-A recusa do nome longo merece uma justificativa. Cortar o nome traria dois
-problemas: o cliente receberia a confirmação de um nome diferente do que enviou,
-e o corte em 49 bytes poderia cair no meio de um caractere acentuado, que ocupa
-dois bytes. Nomes com acento são aceitos normalmente.
-
 \subsection{Escopo declarado: o que não foi implementado}
 
-A introdução do enunciado cita funcionalidades que não aparecem nas telas, na
-Observação nem nos oito itens exigidos desta documentação. Elas ficaram fora de
+A introdução do enunciado cita algumas funcionalidades. Algumas ficaram fora de
 escopo, e a decisão está declarada aqui, como o enunciado exige.
 
 {\footnotesize
@@ -658,18 +683,36 @@ O enunciado determina cliente e servidor em C, iniciados por linha de comando \\
 \bottomrule
 \end{longtable}}
 
-\subsection{Limitação conhecida: estouro de inteiro no identificador}
+\subsection{Limitações conhecidas}
 
-O identificador é lido com \texttt{sscanf(entrada, "\%d", \&id)}. Um número acima
-do limite do tipo \texttt{int} sofre estouro silencioso e é gravado com outro
-valor. Em teste, \texttt{99999999999999} entrou na fila como
-\texttt{276447231}.
+Três comportamentos foram identificados durante os testes e ficam declarados
+aqui, em vez de contornados.
 
-Identificadores negativos e zero são recusados, mas o estouro produz um valor
-positivo, então passa pela validação. Corrigir exigiria voltar a
-\texttt{strtol} com verificação de \texttt{errno}. Como é um comportamento comum
-em C e sem efeito sobre o funcionamento do sistema, a limitação foi registrada
-em vez de contornada.
+\vspace{6pt}
+\noindent\textbf{Estouro de inteiro no identificador.} O identificador é lido com
+\texttt{sscanf(entrada, "\%d", \&id)}. Um número acima do limite do tipo
+\texttt{int} sofre estouro silencioso e é gravado com outro valor: em teste,
+\texttt{99999999999999} entrou na fila como \texttt{276447231}. Negativos e zero
+são recusados, mas o estouro produz um valor positivo, então passa pela
+validação. Corrigir exigiria voltar a \texttt{strtol} com verificação de
+\texttt{errno}. É um comportamento comum em C e sem efeito sobre o funcionamento
+do sistema.
+
+\vspace{6pt}
+\noindent\textbf{O teto de clientes é menor que o da fila.} A fila cabe 20.000
+usuários, mas a tabela de sessões cabe 12.000
+(\texttt{MAX\_SESSOES}). Portanto o número máximo de clientes conectados ao mesmo
+tempo é 12.000, e não 20.000. Os dois limites são independentes: um cliente pode
+cadastrar vários usuários. O valor de 12.000 cobre com folga o maior teste
+exigido, que é de 10.000 clientes.
+
+\vspace{6pt}
+\noindent\textbf{O retrato da fila é reescrito por inteiro.} A cada inserção, o
+arquivo \texttt{fila.txt} é regravado do começo, e não acrescido de uma linha. O
+custo cresce com o tamanho da fila. A escolha foi essa porque o arquivo precisa
+refletir o estado atual, no mesmo formato da resposta de \texttt{LIST}; o
+registro que só cresce é o \texttt{historico.txt}, que recebe uma linha por
+inserção. Com o volume deste trabalho a diferença não aparece.
 
 \subsection{Persistência em arquivos de texto}
 \label{sec:persistencia}
@@ -767,7 +810,7 @@ Os testes seguiram três frentes, todas repetidas a cada alteração do código:
 \begin{enumerate}
   \item \textbf{Teste funcional} --- dois clientes reproduzindo a sequência das
         telas do enunciado.
-  \item \textbf{Casos especiais} --- um programa em Python conversando direto com
+  \item \textbf{Casos especiais} --- um programa conversando direto com
         o servidor pelo socket, enviando comandos válidos e inválidos e
         conferindo cada resposta. Falar o protocolo em texto permite testar
         situações que o \texttt{./cliente} não deixaria acontecer, como um
@@ -885,6 +928,17 @@ inseguro, porque cada reenvio produziria um efeito novo.
 O caso 30 comprova que a queda abrupta de um cliente é tratada como um evento
 normal. O \texttt{recv()} devolve zero quando o outro lado fecha, e a thread sai
 do laço, remove a sessão e fecha o socket, sem afetar as demais.
+
+\vspace{6pt}
+\noindent\textbf{Três testes dirigidos à delimitação e à serialização.} As duas
+peças mais delicadas do protocolo são a separação das mensagens e a garantia de
+que um bloco de várias linhas não é partido. Elas foram testadas em separado, por
+um programa que fala direto com o socket. Enviadas duas mensagens completas em um
+único \texttt{write}, o servidor processou as duas, na ordem certa. Enviada uma
+mensagem partida em dois \texttt{write}, com pausa entre eles, o servidor
+remontou a linha corretamente. E com 25 listagens longas pedidas enquanto outro
+cliente cadastrava sem parar, nenhum bloco saiu partido: todos os
+\textit{broadcast} que chegaram durante as listagens apareceram fora dos blocos.
 
 \subsection{Retransmissão vista do lado do cliente}
 
@@ -1070,8 +1124,8 @@ A parte mais difícil do desenvolvimento foi delimitar as mensagens. Os códigos
 vistos em aula trocam uma única mensagem por conexão, então nenhum deles precisa
 resolver esse problema. Aqui a conexão fica aberta e carrega dezenas de
 mensagens, e o TCP entrega os bytes sem separar uma da outra. Foi preciso criar a
-convenção de uma linha por mensagem e um buffer que junta os pedaços recebidos
-até a linha ficar completa.
+convenção de uma linha por mensagem e uma leitura que vai juntando os bytes
+recebidos até a linha ficar completa.
 
 Escolher a técnica de múltiplos clientes também deu trabalho. O enunciado permite
 três caminhos: multiplexação, \texttt{fork()} e threads. Deixei a multiplexação
@@ -1099,10 +1153,9 @@ depois da entrega e experimentar cada uma delas.
 % =============================================================================
 % REFERENCIAS
 % =============================================================================
-% O ambiente thebibliography ja cria o proprio titulo de secao. Por isso o
-% titulo e trocado aqui, em vez de escrito a mao - escrever a mao fazia
-% aparecer dois titulos seguidos no PDF.
-\renewcommand{\refname}{Referências bibliográficas}
+% O ambiente thebibliography ja cria o proprio titulo de secao, usando o
+% \refname definido no preambulo. Nao escrever o titulo a mao aqui - fazer
+% isso fazia aparecer dois titulos seguidos no PDF.
 \addcontentsline{toc}{section}{Referências bibliográficas}
 
 \begin{thebibliography}{9}
